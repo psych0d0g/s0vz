@@ -261,11 +261,14 @@ void update_curl_handle(const char *vzuuid) {
 
 void update_average_values(struct valuePack *vP) {
 	unsigned long ts = unixtime();
+	int time = 0;
+	double wattProImpuls = 0;
+	double tmp_value = 0;
 	if (vP->lastTs != 0)
 	{
-		int time = (int)ts-vP->lastTs;
-		double wattProImpuls = 1000.0 / (double)vP->impulsConst;
-        double tmp_value = wattProImpuls * (3.6 / (double)time) * 1000000.0; // Zeit in MS
+		time = (int)ts-vP->lastTs;
+		wattProImpuls = 1000.0 / (double)vP->impulsConst;
+        tmp_value = wattProImpuls * (3.6 / (double)time) * 1000000.0; // Zeit in MS
 	    vP->valuesAsSumm += tmp_value / 1000.0;
 	    vP->numberOfValues++;
 	    printf("Summe: %.3f Anzahl %d TMPValue: %.3f Watt/imp: %f \n", vP->valuesAsSumm, vP->numberOfValues, tmp_value, wattProImpuls );
