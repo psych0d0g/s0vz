@@ -62,6 +62,15 @@ int inputs = sizeof(gpio_pin_id)/sizeof(gpio_pin_id[0]);
 
 struct timeval tv;
 
+struct valuePack
+{
+	char vzuuid[64];
+	double valuesAsSumm;
+	int numberOfValues;
+	int impulsConst;
+	long lastTs;
+};
+
 CURL *easyhandle[sizeof(gpio_pin_id)/sizeof(gpio_pin_id[0])];
 CURLM *multihandle;
 CURLMcode multihandle_res;
@@ -250,6 +259,23 @@ void update_curl_handle(const char *vzuuid) {
 				
 }
 
+void update_average_values(struct valuePack *vP) {
+	unsigned long ts = unixtime();
+	if (vP->lastTs != 0)
+	{
+		int time = (int)ts-vP->lastTs;
+		double wattProImpuls = 1000.0 / vP->impulsConst;
+        double tmp_value = wattProImpuls * (3.6 / time) * 1000000.0; // Zeit in MS
+	    vP->valuesAsSumm += tmp_value / 1000.0;
+	    vP->numberOfValues++;
+	    printf("Summe: %.3f Anzahl %d\n", vP->valuesAsSumm, vP->numberOfValues );
+	}
+	else
+		vP->lastTs = ts;
+
+}
+
+
 int main(void) {
 
 	freopen( "/dev/null", "r", stdin);
@@ -268,11 +294,15 @@ int main(void) {
 	
 	char pid_file[16];
 	sprintf ( pid_file, "/tmp/%s.pid", DAEMON_NAME );
-	daemonize( "/tmp/", pid_file );
+	//daemonize( "/tmp/", pid_file );
 	
+
+	 	struct valuePack values[6];
+
+
 		char buffer[BUF_LEN];
 		struct pollfd fds[inputs];
-		
+
 		curl_global_init(CURL_GLOBAL_ALL);
 		multihandle = curl_multi_init();
 			
@@ -299,7 +329,13 @@ int main(void) {
 			curl_easy_setopt(easyhandle[i], CURLOPT_ERRORBUFFER, errorBuffer);
 			
 			curl_multi_add_handle(multihandle, easyhandle[i]);
-										
+
+			strcpy(values[i].vzuuid, vzuuid[i]);
+			values[i].numberOfValues = 0;
+			values[i].valuesAsSumm = 0;
+			values[i].impulsConst = 1000;
+			values[i].lastTs = 0;
+
 		}
 										
 			for ( ;; ) {
@@ -315,7 +351,8 @@ int main(void) {
 					for (i=0; i<inputs; i++) {
 						if (fds[i].revents & POLLPRI) {
 						len = read(fds[i].fd, buffer, BUF_LEN);
-						update_curl_handle(vzuuid[i]);
+						//update_curl_handle(vzuuid[i]);
+						update_average_values( &values[i]);
 						}
 					}
 				}
