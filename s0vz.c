@@ -273,8 +273,8 @@ void update_average_values(struct valuePack *vP) {
 	    vP->numberOfValues++;
 	    printf("Summe: %.3f Anzahl %d TMPValue: %.3f Zeit: %d ms \n", vP->valuesAsSumm, vP->numberOfValues, tmp_value, time );
 	}
-	else
-		vP->lastTs = ts;
+
+	vP->lastTs = ts;
 
 }
 
