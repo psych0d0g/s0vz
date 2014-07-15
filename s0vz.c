@@ -307,7 +307,7 @@ int main(void) {
 		multihandle = curl_multi_init();
 			
 		for (i=0; i<inputs; i++) {
-		
+			print("Current: %d\n", i);
 			snprintf ( buffer, BUF_LEN, "/sys/class/gpio/gpio%d/value", gpio_pin_id[i] );
 
 			if((fds[i].fd = open(buffer, O_RDONLY|O_NONBLOCK)) == 0) {
