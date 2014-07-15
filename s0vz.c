@@ -264,7 +264,7 @@ void update_average_values(struct valuePack *vP) {
 	if (vP->lastTs != 0)
 	{
 		int time = (int)ts-vP->lastTs;
-		double wattProImpuls = 1000.0 / vP->impulsConst;
+		double wattProImpuls = 1000.0 / (double)vP->impulsConst;
         double tmp_value = wattProImpuls * (3.6 / time) * 1000000.0; // Zeit in MS
 	    vP->valuesAsSumm += tmp_value / 1000.0;
 	    vP->numberOfValues++;
