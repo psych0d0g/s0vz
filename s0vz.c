@@ -268,7 +268,7 @@ void update_average_values(struct valuePack *vP) {
         double tmp_value = wattProImpuls * (3.6 / time) * 1000000.0; // Zeit in MS
 	    vP->valuesAsSumm += tmp_value / 1000.0;
 	    vP->numberOfValues++;
-	    printf("Summe: %.3f Anzahl %d\n", vP->valuesAsSumm, vP->numberOfValues );
+	    printf("Summe: %.3f Anzahl %d TMPValue; %.3f Watt/imp %d \n", vP->valuesAsSumm, vP->numberOfValues, tmp_value, wattProImpuls );
 	}
 	else
 		vP->lastTs = ts;
