@@ -278,9 +278,9 @@ void update_average_values(struct valuePack *vP) {
 
 int main(void) {
 
-	freopen( "/dev/null", "r", stdin);
-	freopen( "/dev/null", "w", stdout);
-	freopen( "/dev/null", "w", stderr);
+	//freopen( "/dev/null", "r", stdin);
+	//freopen( "/dev/null", "w", stdout);
+	//freopen( "/dev/null", "w", stderr);
 
 	FILE* devnull = NULL;		
 	devnull = fopen("/dev/null", "w+");
