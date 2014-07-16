@@ -56,7 +56,7 @@ void daemonize(char *rundir, char *pidfile);
 
 int pidFilehandle, vzport, i, len, running_handles, rc;
 
-const char *vzserver, *vzpath, *vzuuid[64];
+const char *Datafolder, *Messstellenname, *Mittelwertzeit, *Impulswerte[6];
 
 char gpio_pin_id[] = { 17, 18, 27, 22, 23, 24 }, url[128];
 
@@ -198,49 +198,49 @@ void cfile() {
 
 	if(!config_read_file(&cfg, DAEMON_NAME".cfg"))
 	{
-		syslog(LOG_INFO, "Config error > /etc/%s - %s\n", config_error_file(&cfg),config_error_text(&cfg));
+		syslog(LOG_INFO, "Config error > %s - %s\n", config_error_file(&cfg),config_error_text(&cfg));
 		config_destroy(&cfg);
 		daemonShutdown();
 		exit(EXIT_FAILURE);
 	}
 
-	if (!config_lookup_string(&cfg, "vzserver", &vzserver))
+	if (!config_lookup_string(&cfg, "Datafolder", &Datafolder))
 	{
-		syslog(LOG_INFO, "Missing 'VzServer' setting in configuration file.");
+		syslog(LOG_INFO, "Missing 'Datafolder' setting in configuration file.");
 		config_destroy(&cfg);
 		daemonShutdown();
 		exit(EXIT_FAILURE);
 	}
 	else
-	syslog(LOG_INFO, "VzServer:%s", vzserver);
+	syslog(LOG_INFO, "Datafolder:%s", Datafolder);
 
-	if (!config_lookup_int(&cfg, "vzport", &vzport))
+	if (!config_lookup_int(&cfg, "Messstellenname", &Messstellenname))
 	{
-		syslog(LOG_INFO, "Missing 'VzPort' setting in configuration file.");
+		syslog(LOG_INFO, "Missing 'Messstellenname' setting in configuration file.");
 		config_destroy(&cfg);
 		daemonShutdown();
 		exit(EXIT_FAILURE);
 	}
 	else
-	syslog(LOG_INFO, "VzPort:%d", vzport);
+	syslog(LOG_INFO, "Messstellenname:%d", Messstellenname);
 
 
-	if (!config_lookup_string(&cfg, "vzpath", &vzpath))
+	if (!config_lookup_string(&cfg, "Mittelwertzeit", &Mittelwertzeit))
 	{
-		syslog(LOG_INFO, "Missing 'VzPath' setting in configuration file.");
+		syslog(LOG_INFO, "Missing 'Mittelwertzeit' setting in configuration file.");
 		config_destroy(&cfg);
 		daemonShutdown();
 		exit(EXIT_FAILURE);
 	}
 	else
-	syslog(LOG_INFO, "VzPath:%s", vzpath);
+	syslog(LOG_INFO, "Mittelwertzeit:%s", Mittelwertzeit);
 
 	for (i=0; i<inputs; i++)
 	{
 		char gpio[6];
 		sprintf ( gpio, "GPIO%01d", i );
-		if ( config_lookup_string( &cfg, gpio, &vzuuid[i]) == CONFIG_TRUE )
-		syslog ( LOG_INFO, "%s = %s", gpio, vzuuid[i] );
+		if ( config_lookup_string( &cfg, gpio, &Impulswerte[i]) == CONFIG_TRUE )
+		syslog ( LOG_INFO, "%s = %s", gpio, Impulswerte[i] );
 	}
 
 }
@@ -253,17 +253,17 @@ unsigned long long unixtime() {
 return ms_timestamp;
 }
 
-void update_curl_handle(const char *vzuuid) {
-
-		curl_multi_remove_handle(multihandle, easyhandle[i]);
-
-		sprintf(url, "http://%s:%d/%s/data/%s.json?ts=%llu", vzserver, vzport, vzpath, vzuuid, unixtime());
-
-		curl_easy_setopt(easyhandle[i], CURLOPT_URL, url);
-
-		curl_multi_add_handle(multihandle, easyhandle[i]);
-
-}
+//void update_curl_handle(const char *vzuuid) {
+//
+//		curl_multi_remove_handle(multihandle, easyhandle[i]);
+//
+//		sprintf(url, "http://%s:%d/%s/data/%s.json?ts=%llu", vzserver, vzport, vzpath, vzuuid, unixtime());
+//
+//		curl_easy_setopt(easyhandle[i], CURLOPT_URL, url);
+//
+//		curl_multi_add_handle(multihandle, easyhandle[i]);
+//
+//}
 
 int appendToFile(char *filename, char *str)
 {
@@ -401,7 +401,7 @@ int main(void) {
 
 			curl_multi_add_handle(multihandle, easyhandle[i]);
 
-			strcpy(values[i].vzuuid, vzuuid[i]);
+			strcpy(values[i].vzuuid, Impulswerte[i]);
 			values[i].numberOfValues = 0;
 			values[i].valuesAsSumm = 0;
 			values[i].impulsConst = 1000;
