@@ -265,6 +265,19 @@ void update_curl_handle(const char *vzuuid) {
 				
 }
 
+int appendToFile(char *filename, char *str)
+{
+	FILE *fd;
+	fd = fopen(filename, "a");
+	if (fd != NULL)
+	{
+		fputs(str, fd);
+		fclose(fd);
+		return 0;
+	}
+	return 1;
+}
+
 void update_average_values(struct valuePack *vP) {
 	unsigned long ts = unixtime();
 	int time = 0;
@@ -289,27 +302,41 @@ void update_average_values(struct valuePack *vP) {
 void *intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Parameter und Rückgabe
    double averrage[6];
    char str[100];
-   printf("Thread created");
+   printf("Thread created\n");
 
 	while(1)
 	{
 		sleep(60);
 		sem_wait(&sem_averrage);
 		for (i=0; i<inputs; i++) {
-			averrage[i] = values[i].valuesAsSumm / values[i].numberOfValues;
+			if (values[i].numberOfValues > 0 )
+			{
+				averrage[i] = values[i].valuesAsSumm / values[i].numberOfValues;
+			}
+			else
+			{
+				averrage[i] = 0;
+			}
 			values[i].numberOfValues = 0;
 			values[i].valuesAsSumm = 0;
 			sprintf(str,"%s%.3f;",str, averrage[i]);
 		}
 		sem_post(&sem_averrage);
 
-		printf("%s",str);
+		sprintf(str,"%s%c",'\n');
+		if (appendToFile("./data", str) != 0)
+		{
+			printf("Can not append to File %s.", "filename_noch_nicht_vergeben");
+		}
+		printf("%s\n",str);
 		str[0] = '\0';
 
 	}
-	printf("Thread wird beendet");
-   return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
+	printf("Thread wird beendet\n");
+    return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
 }
+
+
 
 
 int main(void) {
@@ -334,8 +361,13 @@ int main(void) {
 	
 
 	sem_init(&sem_averrage, 0, 1);
+	/* Thread erstellen für interval Berechnung*/
 	pthread_t intervalThread;
-	pthread_create( &intervalThread, NULL, intervallFunction, NULL );
+	if (pthread_create( &intervalThread, NULL, intervallFunction, NULL ) != 0)
+	{
+		printf("Thread can not be create.");
+		exit(1);
+	}
 
 	char buffer[BUF_LEN];
 		struct pollfd fds[inputs];
