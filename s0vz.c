@@ -286,7 +286,7 @@ void update_average_values(struct valuePack *vP) {
 
 }
 
-void intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Parameter und Rückgabe
+void *intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Parameter und Rückgabe
    double averrage[6];
    char str[100];
 	while(1)
@@ -305,7 +305,7 @@ void intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Parameter
 		str[0] = '\0';
 
 	}
-   return;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
+   return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
 }
 
 
