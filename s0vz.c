@@ -43,6 +43,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <libconfig.h>          /* reading, manipulating, and writing structured configuration files */
 #include <curl/curl.h>          /* multiprotocol file transfer library */
 #include <poll.h>			/* wait for events on file descriptors */
+#include <pthread.h>
+#include <semaphore.h>
 
 #include <sys/ioctl.h>		/* */
 
@@ -70,6 +72,10 @@ struct valuePack
 	int impulsConst;
 	long lastTs;
 };
+
+struct valuePack values[6];
+sem_t sem_averrage;
+
 
 CURL *easyhandle[sizeof(gpio_pin_id)/sizeof(gpio_pin_id[0])];
 CURLM *multihandle;
@@ -266,16 +272,40 @@ void update_average_values(struct valuePack *vP) {
 	double tmp_value = 0;
 	if (vP->lastTs != 0)
 	{
+		sem_wait(&sem_averrage);
 		time = (int)(ts-vP->lastTs);
 		wattProImpuls = 1000.0 / (double)vP->impulsConst;
         tmp_value = wattProImpuls * (3.6 / (double)time) * 1000000.0; // Zeit in MS
 	    vP->valuesAsSumm += tmp_value / 1000.0;
 	    vP->numberOfValues++;
+
 	    printf("Summe: %.3f Anzahl %d TMPValue: %.3f Zeit: %d ms \n", vP->valuesAsSumm, vP->numberOfValues, tmp_value, time );
 	}
 
 	vP->lastTs = ts;
 
+}
+
+void intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Parameter und Rückgabe
+   double averrage[6];
+   char str[100];
+	while(1)
+	{
+		sleep(60);
+		sem_wait(&sem_averrage);
+		for (i=0; i<inputs; i++) {
+			averrage[i] = values[i].valuesAsSumm / values[i].numberOfValues;
+			values[i].numberOfValues = 0;
+			values[i].valuesAsSumm = 0;
+			sprintf(str,"%s%.3f;",str, averrage[i]);
+		}
+		sem_post(&sem_averrage);
+
+		printf("%s",str);
+		str[0] = '\0';
+
+	}
+   return;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
 }
 
 
@@ -300,10 +330,11 @@ int main(void) {
 	//daemonize( "/tmp/", pid_file );
 	
 
-	 	struct valuePack values[6];
+	sem_init(&sem_averrage, 0, 1);
+	pthread_t intervalThread;
+	pthread_create( &intervalThread, NULL, intervallFunction, NULL );
 
-
-		char buffer[BUF_LEN];
+	char buffer[BUF_LEN];
 		struct pollfd fds[inputs];
 
 		curl_global_init(CURL_GLOBAL_ALL);
