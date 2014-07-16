@@ -289,6 +289,8 @@ void update_average_values(struct valuePack *vP) {
 void *intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Parameter und Rückgabe
    double averrage[6];
    char str[100];
+   printf("Thread created");
+
 	while(1)
 	{
 		sleep(60);
@@ -305,6 +307,7 @@ void *intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Paramete
 		str[0] = '\0';
 
 	}
+	printf("Thread wird beendet");
    return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
 }
 
@@ -320,7 +323,7 @@ int main(void) {
 		
 	setlogmask(LOG_UPTO(LOG_INFO));
 	openlog(DAEMON_NAME, LOG_CONS | LOG_PERROR, LOG_USER);
-
+	printf("Programm beginnt....");
 	syslog ( LOG_INFO, "S0/Impulse to Volkszaehler RaspberryPI deamon %s.%s", DAEMON_VERSION, DAEMON_BUILD );
 	
 	cfile();
