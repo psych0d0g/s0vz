@@ -269,6 +269,8 @@ int appendToFile(char *filename, char *str)
 {
 	FILE *fd;
 	fd = fopen(filename, "a");
+
+	printf("Now will add to file: %s this string: %s",filename, str);
 	if (fd != NULL)
 	{
 		fputs(str, fd);
