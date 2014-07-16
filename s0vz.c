@@ -145,7 +145,7 @@ void daemonize(char *rundir, char *pidfile) {
 		printf("Child process created: %d\n", pid);
 		exit(EXIT_SUCCESS);
 	}
-	
+
 	umask(027);
 
 	sid = setsid();
@@ -194,7 +194,7 @@ void cfile() {
 
 	int chdir(const char *path);
 
-	chdir ("/etc");
+	//chdir ("/etc");
 
 	if(!config_read_file(&cfg, DAEMON_NAME".cfg"))
 	{
@@ -256,13 +256,13 @@ return ms_timestamp;
 void update_curl_handle(const char *vzuuid) {
 
 		curl_multi_remove_handle(multihandle, easyhandle[i]);
-		
+
 		sprintf(url, "http://%s:%d/%s/data/%s.json?ts=%llu", vzserver, vzport, vzpath, vzuuid, unixtime());
-		
+
 		curl_easy_setopt(easyhandle[i], CURLOPT_URL, url);
-		
+
 		curl_multi_add_handle(multihandle, easyhandle[i]);
-				
+
 }
 
 int appendToFile(char *filename, char *str)
@@ -347,20 +347,20 @@ int main(void) {
 	//freopen( "/dev/null", "w", stdout);
 	//freopen( "/dev/null", "w", stderr);
 
-	FILE* devnull = NULL;		
+	FILE* devnull = NULL;
 	devnull = fopen("/dev/null", "w+");
-		
+
 	setlogmask(LOG_UPTO(LOG_INFO));
 	openlog(DAEMON_NAME, LOG_CONS | LOG_PERROR, LOG_USER);
 	printf("Programm beginnt....");
 	syslog ( LOG_INFO, "S0/Impulse to Volkszaehler RaspberryPI deamon %s.%s", DAEMON_VERSION, DAEMON_BUILD );
-	
+
 	cfile();
-	
+
 	char pid_file[16];
 	sprintf ( pid_file, "/tmp/%s.pid", DAEMON_NAME );
 	//daemonize( "/tmp/", pid_file );
-	
+
 
 	sem_init(&sem_averrage, 0, 1);
 	/* Thread erstellen für interval Berechnung*/
@@ -376,29 +376,29 @@ int main(void) {
 
 		curl_global_init(CURL_GLOBAL_ALL);
 		multihandle = curl_multi_init();
-			
+
 		for (i=0; i<inputs; i++) {
 			printf("Current: %d\n", i);
 			snprintf ( buffer, BUF_LEN, "/sys/class/gpio/gpio%d/value", gpio_pin_id[i] );
 
 			if((fds[i].fd = open(buffer, O_RDONLY|O_NONBLOCK)) == 0) {
-			
+
 				syslog(LOG_INFO,"Error:%s (%m)", buffer);
 				exit(1);
-				
+
 			}
-		
+
 			fds[i].events = POLLPRI;
-			fds[i].revents = 0;	
-				
+			fds[i].revents = 0;
+
 			easyhandle[i] = curl_easy_init();
-			
+
 			curl_easy_setopt(easyhandle[i], CURLOPT_URL, url);
 			curl_easy_setopt(easyhandle[i], CURLOPT_POSTFIELDS, "");
 			curl_easy_setopt(easyhandle[i], CURLOPT_USERAGENT, DAEMON_NAME " " DAEMON_VERSION );
 			curl_easy_setopt(easyhandle[i], CURLOPT_WRITEDATA, devnull);
 			curl_easy_setopt(easyhandle[i], CURLOPT_ERRORBUFFER, errorBuffer);
-			
+
 			curl_multi_add_handle(multihandle, easyhandle[i]);
 
 			strcpy(values[i].vzuuid, vzuuid[i]);
@@ -408,17 +408,17 @@ int main(void) {
 			values[i].lastTs = 0;
 
 		}
-										
+
 			for ( ;; ) {
-			
+
 				if((multihandle_res = curl_multi_perform(multihandle, &running_handles)) != CURLM_OK) {
 				syslog(LOG_INFO, "HTTP_POST(): %s", curl_multi_strerror(multihandle_res) );
 				}
-				
+
 				int ret = poll(fds, inputs, 1000);
-						
+
 				if(ret>0) {
-			
+
 					for (i=0; i<inputs; i++) {
 						if (fds[i].revents & POLLPRI) {
 						len = read(fds[i].fd, buffer, BUF_LEN);
@@ -428,9 +428,8 @@ int main(void) {
 					}
 				}
 			}
-	
+
 		curl_global_cleanup();
-	
+
 return 0;
 }
-
