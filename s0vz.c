@@ -325,7 +325,7 @@ void *intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Paramete
 		}
 		sem_post(&sem_averrage);
 
-		sprintf(str,"%s%c",'\n');
+		sprintf(str,"%s%c",str,'\n');
 		if (appendToFile("./data", str) != 0)
 		{
 			printf("Can not append to File %s.", "filename_noch_nicht_vergeben");
