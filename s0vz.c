@@ -46,6 +46,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <pthread.h>
 #include <semaphore.h>
 
+
 #include <sys/ioctl.h>		/* */
 
 #define BUF_LEN 64
@@ -56,7 +57,8 @@ void daemonize(char *rundir, char *pidfile);
 
 int pidFilehandle, vzport, i, len, running_handles, rc;
 
-const char *Datafolder, *Messstellenname, *Mittelwertzeit, *Impulswerte[6];
+const char *Datafolder, *Messstellenname, *Impulswerte[6];
+int Mittelwertzeit;
 
 char gpio_pin_id[] = { 17, 18, 27, 22, 23, 24 }, url[128];
 
@@ -214,18 +216,18 @@ void cfile() {
 	else
 	syslog(LOG_INFO, "Datafolder:%s", Datafolder);
 
-	if (!config_lookup_int(&cfg, "Messstellenname", &Messstellenname))
+	if (!config_lookup_string(&cfg, "Messstelle", &Messstellenname))
 	{
-		syslog(LOG_INFO, "Missing 'Messstellenname' setting in configuration file.");
+		syslog(LOG_INFO, "Missing 'Messstelle' setting in configuration file.");
 		config_destroy(&cfg);
 		daemonShutdown();
 		exit(EXIT_FAILURE);
 	}
 	else
-	syslog(LOG_INFO, "Messstellenname:%d", Messstellenname);
+	syslog(LOG_INFO, "Messstelle:%s", Messstellenname);
 
 
-	if (!config_lookup_string(&cfg, "Mittelwertzeit", &Mittelwertzeit))
+	if (!config_lookup_int(&cfg, "Mittelwertzeit", &Mittelwertzeit))
 	{
 		syslog(LOG_INFO, "Missing 'Mittelwertzeit' setting in configuration file.");
 		config_destroy(&cfg);
@@ -233,7 +235,7 @@ void cfile() {
 		exit(EXIT_FAILURE);
 	}
 	else
-	syslog(LOG_INFO, "Mittelwertzeit:%s", Mittelwertzeit);
+	syslog(LOG_INFO, "Mittelwertzeit:%i", Mittelwertzeit);
 
 	for (i=0; i<inputs; i++)
 	{
@@ -268,9 +270,24 @@ return ms_timestamp;
 int appendToFile(char *filename, char *str)
 {
 	FILE *fd;
-	fd = fopen(filename, "a");
+	struct stat st = {0};
+	struct tm* ptm;
+	char time_string[11];
+	char filepath[200];
 
-	printf("Now will add to file: %s this string: %s",filename, str);
+	/* Create directory if not exist*/
+	if (stat(filename, &st) == -1) {
+	    mkdir(filename, 0700);
+	}
+
+	/* Filename ermitteln anhand des Datums */
+	gettimeofday (&tv, NULL);
+	ptm = localtime (&tv.tv_sec);
+	strftime (time_string, sizeof (time_string), "%Y-%m-%d", ptm);
+	sprintf(filepath,"%s/%s.csv",filename, time_string);
+	printf("Now will add to file: %s this string: %s",filepath, str);
+
+	fd = fopen(filepath, "a");
 	if (fd != NULL)
 	{
 		fputs(str, fd);
@@ -301,14 +318,15 @@ void update_average_values(struct valuePack *vP) {
 
 }
 
-void *intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Parameter und Rückgabe
-   double averrage[6];
-   char str[100];
-   printf("Thread created\n");
+void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Parameter und Rückgabe
+	int t = *((int*) time);
+	double averrage[6];
+	char str[100];
+	printf("Thread created\n");
 
 	while(1)
 	{
-		sleep(60);
+		sleep(t);
 		sem_wait(&sem_averrage);
 		for (i=0; i<inputs; i++) {
 			if (values[i].numberOfValues > 0 )
@@ -326,7 +344,7 @@ void *intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Paramete
 		sem_post(&sem_averrage);
 
 		sprintf(str,"%s%c",str,'\n');
-		if (appendToFile("./data", str) != 0)
+		if (appendToFile(Datafolder , str) != 0)
 		{
 			printf("Can not append to File %s.", "filename_noch_nicht_vergeben");
 		}
@@ -338,8 +356,20 @@ void *intervallFunction(void *ptr) { // Der Type ist wichtig: void* als Paramete
     return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
 }
 
+void *intervallTemperatur(void *time) { // Der Type ist wichtig: void* als Parameter und Rückgabe
+	int t = *((int*) time);
+
+   printf("Thread created\n");
+
+	while(1)
+	{
+		sleep(t);
 
 
+	}
+	printf("Thread wird beendet\n");
+    return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
+}
 
 int main(void) {
 
@@ -365,7 +395,7 @@ int main(void) {
 	sem_init(&sem_averrage, 0, 1);
 	/* Thread erstellen für interval Berechnung*/
 	pthread_t intervalThread;
-	if (pthread_create( &intervalThread, NULL, intervallFunction, NULL ) != 0)
+	if (pthread_create( &intervalThread, NULL, intervallFunction, (void *) &Mittelwertzeit ) != 0)
 	{
 		printf("Thread can not be create.");
 		exit(1);
