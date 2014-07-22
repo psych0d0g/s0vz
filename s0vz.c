@@ -489,7 +489,7 @@ double ds1820read(const char *sensorid) {
 
 		temp = atof(pos)/1000;
 		fclose ( fp );
-		printf("Sensor %s: Temperatur: %f",sensorid, temp );
+		printf("Sensor %s: Temperatur: %f\n",sensorid, temp );
 		//http_post(temp, vzuuid[i][count]);
 		}
 	}
@@ -497,8 +497,8 @@ double ds1820read(const char *sensorid) {
 
 void *intervallTemperatur(void *time) { // Der Type ist wichtig: void* als Parameter und Rückgabe
 	int t = *((int*) time);
-
-   printf("Temperatur Thread created\n");
+	int i = 0;
+    printf("Temperatur Thread created\n");
 
 	while(1)
 	{
