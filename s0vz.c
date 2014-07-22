@@ -1,12 +1,12 @@
 /**************************************************************************
 
-S0/Impulse to Volkszaehler 'RaspberryPI deamon'.
+ S0/Impulse to Volkszaehler 'RaspberryPI deamon'.
 
-https://github.com/w3llschmidt/s0vz.git
+ https://github.com/w3llschmidt/s0vz.git
 
-Henrik Wellschmidt  <w3llschmidt@gmail.com>
+ Henrik Wellschmidt  <w3llschmidt@gmail.com>
 
-**************************************************************************/
+ **************************************************************************/
 
 #define DAEMON_NAME "s0vz"
 #define DAEMON_VERSION "1.4"
@@ -14,20 +14,20 @@ Henrik Wellschmidt  <w3llschmidt@gmail.com>
 
 /**************************************************************************
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License
-along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-**************************************************************************/
+ **************************************************************************/
 
 #include <stdio.h>              /* standard library functions for file input and output */
 #include <stdlib.h>             /* standard library for the C programming language, */
@@ -47,7 +47,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <pthread.h>
 #include <semaphore.h>
 
-
 #include <sys/ioctl.h>		/* */
 
 #define BUF_LEN 64
@@ -58,26 +57,24 @@ void daemonize(char *rundir, char *pidfile);
 
 int pidFilehandle, vzport, len, running_handles, rc, count, tempSensors;
 
-const char *Datafolder, *Messstellenname, *Impulswerte[6],*uuid, *W1Sensor[100];
+const char *Datafolder, *Messstellenname, *Impulswerte[6], *uuid,
+		*W1Sensor[100];
 int Mittelwertzeit;
 int tempraturIntervall;
-
 
 char crc_ok[] = "YES";
 char not_found[] = "not found.";
 
 char gpio_pin_id[] = { 17, 18, 27, 22, 23, 24 }, url[128];
 
-int inputs = sizeof(gpio_pin_id)/sizeof(gpio_pin_id[0]);
-
+int inputs = sizeof(gpio_pin_id) / sizeof(gpio_pin_id[0]);
 
 double temp;
 config_t cfg;
 
 struct timeval tv;
 
-struct valuePack
-{
+struct valuePack {
 	double valuesAsSumm;
 	int numberOfValues;
 	int impulsConst;
@@ -88,34 +85,33 @@ struct valuePack *values;
 
 sem_t sem_averrage;
 
-CURL *easyhandle[sizeof(gpio_pin_id)/sizeof(gpio_pin_id[0])];
+CURL *easyhandle[sizeof(gpio_pin_id) / sizeof(gpio_pin_id[0])];
 CURLM *multihandle;
 CURLMcode multihandle_res;
 
-static char errorBuffer[CURL_ERROR_SIZE+1];
+static char errorBuffer[CURL_ERROR_SIZE + 1];
 
 void signal_handler(int sig) {
 
-	switch(sig)
-	{
-		case SIGHUP:
+	switch (sig) {
+	case SIGHUP:
 		syslog(LOG_WARNING, "Received SIGHUP signal.");
 		break;
-		case SIGINT:
-		case SIGTERM:
+	case SIGINT:
+	case SIGTERM:
 		syslog(LOG_INFO, "Daemon exiting");
 		daemonShutdown();
 		exit(EXIT_SUCCESS);
 		break;
-		default:
+	default:
 		syslog(LOG_WARNING, "Unhandled signal %s", strsignal(sig));
 		break;
 	}
 }
 
 void daemonShutdown() {
-		close(pidFilehandle);
-		remove("/tmp/s0vz.pid");
+	close(pidFilehandle);
+	remove("/tmp/s0vz.pid");
 }
 
 void daemonize(char *rundir, char *pidfile) {
@@ -124,8 +120,7 @@ void daemonize(char *rundir, char *pidfile) {
 	struct sigaction newSigAction;
 	sigset_t newSigSet;
 
-	if (getppid() == 1)
-	{
+	if (getppid() == 1) {
 		return;
 	}
 
@@ -146,13 +141,11 @@ void daemonize(char *rundir, char *pidfile) {
 
 	pid = fork();
 
-	if (pid < 0)
-	{
+	if (pid < 0) {
 		exit(EXIT_FAILURE);
 	}
 
-	if (pid > 0)
-	{
+	if (pid > 0) {
 		printf("Child process created: %d\n", pid);
 		exit(EXIT_SUCCESS);
 	}
@@ -160,13 +153,11 @@ void daemonize(char *rundir, char *pidfile) {
 	umask(027);
 
 	sid = setsid();
-	if (sid < 0)
-	{
+	if (sid < 0) {
 		exit(EXIT_FAILURE);
 	}
 
-	for (i = getdtablesize(); i >= 0; --i)
-	{
+	for (i = getdtablesize(); i >= 0; --i) {
 		close(i);
 	}
 
@@ -176,27 +167,25 @@ void daemonize(char *rundir, char *pidfile) {
 
 	chdir(rundir);
 
-	pidFilehandle = open(pidfile, O_RDWR|O_CREAT, 0600);
+	pidFilehandle = open(pidfile, O_RDWR | O_CREAT, 0600);
 
-	if (pidFilehandle == -1 )
-	{
+	if (pidFilehandle == -1) {
 		syslog(LOG_INFO, "Could not open PID lock file %s, exiting", pidfile);
 		exit(EXIT_FAILURE);
 	}
 
-	if (lockf(pidFilehandle,F_TLOCK,0) == -1)
-	{
+	if (lockf(pidFilehandle, F_TLOCK, 0) == -1) {
 		syslog(LOG_INFO, "Could not lock PID lock file %s, exiting", pidfile);
 		exit(EXIT_FAILURE);
 	}
 
-	sprintf(str,"%d\n",getpid());
+	sprintf(str, "%d\n", getpid());
 
 	write(pidFilehandle, str, strlen(str));
 }
 
 void cfile() {
-    int i = 0;
+	int i = 0;
 	config_t cfg;
 
 	//config_setting_t *setting;
@@ -206,73 +195,64 @@ void cfile() {
 	int chdir(const char *path);
 
 	//chdir ("/etc");
+	char configfile[200];
+	sprintf(configfile, "%s%s%s", "/etc/", DAEMON_NAME, ".cfg");
 
-	if(!config_read_file(&cfg, DAEMON_NAME".cfg"))
-	{
-		syslog(LOG_INFO, "Config error > %s - %s\n", config_error_file(&cfg),config_error_text(&cfg));
+	if (!config_read_file(&cfg, configfile)) {
+		syslog(LOG_INFO, "Config error > %s - %s\n", config_error_file(&cfg),
+				config_error_text(&cfg));
 		config_destroy(&cfg);
 		daemonShutdown();
 		exit(EXIT_FAILURE);
 	}
 
-	if (!config_lookup_string(&cfg, "Datafolder", &Datafolder))
-	{
+	if (!config_lookup_string(&cfg, "Datafolder", &Datafolder)) {
 		syslog(LOG_INFO, "Missing 'Datafolder' setting in configuration file.");
 		config_destroy(&cfg);
 		daemonShutdown();
 		exit(EXIT_FAILURE);
-	}
-	else
-	syslog(LOG_INFO, "Datafolder:%s", Datafolder);
+	} else
+		syslog(LOG_INFO, "Datafolder:%s", Datafolder);
 
-	if (!config_lookup_string(&cfg, "Messstelle", &Messstellenname))
-	{
+	if (!config_lookup_string(&cfg, "Messstelle", &Messstellenname)) {
 		syslog(LOG_INFO, "Missing 'Messstelle' setting in configuration file.");
 		config_destroy(&cfg);
 		daemonShutdown();
 		exit(EXIT_FAILURE);
-	}
-	else
-	syslog(LOG_INFO, "Messstelle:%s", Messstellenname);
+	} else
+		syslog(LOG_INFO, "Messstelle:%s", Messstellenname);
 
-
-	if (!config_lookup_int(&cfg, "Mittelwertzeit", &Mittelwertzeit))
-	{
-		syslog(LOG_INFO, "Missing 'Mittelwertzeit' setting in configuration file.");
+	if (!config_lookup_int(&cfg, "Mittelwertzeit", &Mittelwertzeit)) {
+		syslog(LOG_INFO,
+				"Missing 'Mittelwertzeit' setting in configuration file.");
 		config_destroy(&cfg);
 		daemonShutdown();
 		exit(EXIT_FAILURE);
-	}
-	else
-	syslog(LOG_INFO, "Mittelwertzeit:%i", Mittelwertzeit);
+	} else
+		syslog(LOG_INFO, "Mittelwertzeit:%i", Mittelwertzeit);
 
-	if (!config_lookup_int(&cfg, "TempraturIntervall", &tempraturIntervall))
-	{
-		syslog(LOG_INFO, "Missing 'TempraturIntervall' setting in configuration file.");
+	if (!config_lookup_int(&cfg, "TempraturIntervall", &tempraturIntervall)) {
+		syslog(LOG_INFO,
+				"Missing 'TempraturIntervall' setting in configuration file.");
 		config_destroy(&cfg);
 		daemonShutdown();
 		exit(EXIT_FAILURE);
-	}
-	else
-	syslog(LOG_INFO, "Mittelwertzeit:%i", tempraturIntervall);
+	} else
+		syslog(LOG_INFO, "Mittelwertzeit:%i", tempraturIntervall);
 
-
-	for (i=0; i<inputs; i++)
-	{
+	for (i = 0; i < inputs; i++) {
 		char gpio[6];
-		sprintf ( gpio, "GPIO%01d", i );
-		if ( config_lookup_string( &cfg, gpio, &Impulswerte[i]) == CONFIG_TRUE )
-		syslog ( LOG_INFO, "%s = %s", gpio, Impulswerte[i] );
+		sprintf(gpio, "GPIO%01d", i);
+		if (config_lookup_string(&cfg, gpio, &Impulswerte[i]) == CONFIG_TRUE)
+			syslog( LOG_INFO, "%s = %s", gpio, Impulswerte[i]);
 	}
 
 	tempSensors = 0;
-	for (i=0; i<100; i++)
-	{
+	for (i = 0; i < 100; i++) {
 		char name[8];
-		sprintf ( name, "W1Dev%01d", i );
-		if ( config_lookup_string( &cfg, name, &W1Sensor[i]) == CONFIG_TRUE )
-		{
-			syslog ( LOG_INFO, "%s = %s", name, W1Sensor[i] );
+		sprintf(name, "W1Dev%01d", i);
+		if (config_lookup_string(&cfg, name, &W1Sensor[i]) == CONFIG_TRUE) {
+			syslog( LOG_INFO, "%s = %s", name, W1Sensor[i]);
 			tempSensors++;
 		}
 	}
@@ -281,39 +261,39 @@ void cfile() {
 
 unsigned long long unixtime() {
 
-	gettimeofday(&tv,NULL);
-	unsigned long long ms_timestamp = (unsigned long long)(tv.tv_sec) * 1000 + (unsigned long long)(tv.tv_usec) / 1000;
+	gettimeofday(&tv, NULL);
+	unsigned long long ms_timestamp = (unsigned long long) (tv.tv_sec) * 1000
+			+ (unsigned long long) (tv.tv_usec) / 1000;
 
-return ms_timestamp;
+	return ms_timestamp;
 }
 
-int appendToFile(const char *filename, char *str)
-{
+int appendToFile(const char *filename, char *str) {
 	FILE *fd;
-	struct stat st = {0};
+	struct stat st = { 0 };
 	struct tm* ptm;
-	char time_string[9];
+	char date_time_string[20];
 	char date_string[11];
 	char filepath[200];
 	char str2[200];
 
 	/* Create directory if not exist*/
 	if (stat(filename, &st) == -1) {
-	    mkdir(filename, 0700);
+		mkdir(filename, 0700);
 	}
 
 	/* Filename ermitteln anhand des Datums */
-	gettimeofday (&tv, NULL);
-	ptm = localtime (&tv.tv_sec);
-	strftime (date_string, sizeof (date_string), "%Y-%m-%d", ptm);
-	strftime (time_string, sizeof (time_string), "%H:%M:%S", ptm);
-	sprintf(filepath,"%s/%s.csv",filename, date_string);
-	sprintf(str2,"%s;%s", time_string, str);
-	printf("Now will add to file: %s this string: %s",filepath, str2);
+	gettimeofday(&tv, NULL);
+	ptm = localtime(&tv.tv_sec);
+	strftime(date_string, sizeof(date_string), "%Y-%m-%d", ptm);
+	strftime(date_time_string, sizeof(date_time_string), "%Y-%m-%d %H:%M:%S",
+			ptm);
+	sprintf(filepath, "%s/%s.csv", filename, date_string);
+	sprintf(str2, "%s;%s", date_time_string, str);
+	printf("Now will add to file: %s this string: %s", filepath, str2);
 
 	fd = fopen(filepath, "a");
-	if (fd != NULL)
-	{
+	if (fd != NULL) {
 		fputs(str2, fd);
 		fclose(fd);
 		return 0;
@@ -326,16 +306,16 @@ void update_average_values(struct valuePack *vP) {
 	int time = 0;
 	double wattProImpuls = 0;
 	double tmp_value = 0;
-	if (vP->lastTs != 0)
-	{
+	if (vP->lastTs != 0) {
 		sem_wait(&sem_averrage);
-		time = (int)(ts-vP->lastTs);
-		wattProImpuls = 1000.0 / (double)vP->impulsConst;
-        tmp_value = wattProImpuls * (3.6 / (double)time) * 1000000.0; // Zeit in MS
-	    vP->valuesAsSumm += tmp_value / 1000.0;
-	    vP->numberOfValues++;
-	    sem_post(&sem_averrage);
-	    printf("Summe: %.3f Anzahl %d TMPValue: %.3f Zeit: %d ms \n", vP->valuesAsSumm, vP->numberOfValues, tmp_value, time );
+		time = (int) (ts - vP->lastTs);
+		wattProImpuls = 1000.0 / (double) vP->impulsConst;
+		tmp_value = wattProImpuls * (3.6 / (double) time) * 1000000.0; // Zeit in MS
+		vP->valuesAsSumm += tmp_value / 1000.0;
+		vP->numberOfValues++;
+		sem_post(&sem_averrage);
+		printf("Summe: %.3f Anzahl %d TMPValue: %.3f Zeit: %d ms \n",
+				vP->valuesAsSumm, vP->numberOfValues, tmp_value, time);
 	}
 
 	vP->lastTs = ts;
@@ -344,48 +324,42 @@ void update_average_values(struct valuePack *vP) {
 
 void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Parameter und Rückgabe
 	int t = *((int*) time);
-	int i=0;
+	int i = 0;
 	double averrage[inputs + tempSensors];
 	char str[200];
 	str[0] = '\0';
 
 	printf("Thread created\n");
 
-	while(1)
-	{
+	while (1) {
 		sleep(t);
 		sem_wait(&sem_averrage);
-		for (i=0; i<(inputs + tempSensors); i++) {
-			if (values[i].numberOfValues > 0 )
-			{
+		for (i = 0; i < (inputs + tempSensors); i++) {
+			if (values[i].numberOfValues > 0) {
 				averrage[i] = values[i].valuesAsSumm / values[i].numberOfValues;
-			}
-			else
-			{
+			} else {
 				averrage[i] = 0;
 			}
 			values[i].numberOfValues = 0;
 			values[i].valuesAsSumm = 0;
-			sprintf(str,"%s%.3f;",str, averrage[i]);
+			sprintf(str, "%s%.3f;", str, averrage[i]);
 		}
 		sem_post(&sem_averrage);
 
-		sprintf(str,"%s%c",str,'\n');
-		if (appendToFile(Datafolder, str) != 0)
-		{
-			printf("Can not append to File %s.", "filename_noch_nicht_vergeben");
+		sprintf(str, "%s%c", str, '\n');
+		if (appendToFile(Datafolder, str) != 0) {
+			printf("Can not append to File %s.",
+					"filename_noch_nicht_vergeben");
 		}
 		str[0] = '\0';
-
 	}
 	printf("Thread wird beendet\n");
-    return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
+	return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
 }
 
 /** *********************************
  *Beginn der Temperatur Funktionen
  */
-
 
 int ds1820read(const char *sensorid, double *temp) {
 
@@ -393,49 +367,27 @@ int ds1820read(const char *sensorid, double *temp) {
 	char crc_buffer[64], temp_buffer[64], fn[128];
 
 	printf("Lese Temperatur von %s.\n", sensorid);
-	sprintf(fn, "/sys/bus/w1/devices/%s/w1_slave", sensorid );
+	sprintf(fn, "/sys/bus/w1/devices/%s/w1_slave", sensorid);
 
-	if  ( (fp = fopen ( fn, "r"  )) == NULL ) {
+	if ((fp = fopen(fn, "r")) == NULL) {
 		return (-1);
-	}
-	else
-	{
-
-		fgets( crc_buffer, sizeof(crc_buffer), fp );
-		if ( !strstr ( crc_buffer, crc_ok ) )
-	 	{
-
+	} else {
+		fgets(crc_buffer, sizeof(crc_buffer), fp);
+		if (!strstr(crc_buffer, crc_ok)) {
 			syslog(LOG_INFO, "CRC check failed, SensorID: %s", sensorid);
+			fclose(fp);
+			return (-1);
+		} else {
+			fgets(temp_buffer, sizeof(temp_buffer), fp);
+			fgets(temp_buffer, sizeof(temp_buffer), fp);
+			char *pos = strstr(temp_buffer, "t=");
+			if (pos == NULL)
+				return -1;
 
-		fclose ( fp );
-		return(-1);
-		}
-
-		else
-
-		{
-
-		fgets( temp_buffer, sizeof(temp_buffer), fp );
-		fgets( temp_buffer, sizeof(temp_buffer), fp );
-
-		/**************************************************************************
-		char *t;
-		t = strndup ( temp_buffer +29, 5 ) ;
-		temp = atof(t)/1000;
-		**************************************************************************/
-
-		char *pos = strstr(temp_buffer, "t=");
-
-		if (pos == NULL)
-			return -1;
-
-		pos += 2;
-
-		*temp = atof(pos)/1000;
-		fclose ( fp );
-
-		//http_post(temp, vzuuid[i][count]);
-		return 0;
+			pos += 2;
+			*temp = atof(pos) / 1000;
+			fclose(fp);
+			return 0;
 		}
 	}
 }
@@ -446,20 +398,17 @@ void *intervallTemperatur(void *time) { // Der Type ist wichtig: void* als Param
 	int SensorNumber = 0;
 	double temp;
 	int returnValue;
-    printf("Temperatur Thread created\n");
+	printf("Temperatur Thread created\n");
 
-	while(1)
-	{
+	while (1) {
 		SensorNumber = 0;
-		for (i=0; i<100; i++) {
-			if ( W1Sensor[i] != NULL )
-			{
+		for (i = 0; i < 100; i++) {
+			if (W1Sensor[i] != NULL) {
 				returnValue = ds1820read(W1Sensor[i], &temp);
-				if (returnValue == 0)
-				{
+				if (returnValue == 0) {
 					sem_wait(&sem_averrage);
 					values[inputs + SensorNumber].valuesAsSumm += temp;
-					values[inputs + SensorNumber].numberOfValues ++;
+					values[inputs + SensorNumber].numberOfValues++;
 					sem_post(&sem_averrage);
 				}
 			}
@@ -469,11 +418,11 @@ void *intervallTemperatur(void *time) { // Der Type ist wichtig: void* als Param
 		sleep(t);
 	}
 	printf("Thread wird beendet\n");
-    return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
+	return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
 }
 
 int main(void) {
-	int i=0;
+	int i = 0;
 	//freopen( "/dev/null", "r", stdin);
 	//freopen( "/dev/null", "w", stdout);
 	//freopen( "/dev/null", "w", stderr);
@@ -484,15 +433,17 @@ int main(void) {
 	setlogmask(LOG_UPTO(LOG_INFO));
 	openlog(DAEMON_NAME, LOG_CONS | LOG_PERROR, LOG_USER);
 	printf("Programm beginnt....");
-	syslog ( LOG_INFO, "S0/Impulse to Volkszaehler RaspberryPI deamon %s.%s", DAEMON_VERSION, DAEMON_BUILD );
+	syslog( LOG_INFO, "S0/Impulse to Volkszaehler RaspberryPI deamon %s.%s",
+			DAEMON_VERSION, DAEMON_BUILD);
 
 	cfile();
 
 	char pid_file[16];
-	sprintf ( pid_file, "/tmp/%s.pid", DAEMON_NAME );
+	sprintf(pid_file, "/tmp/%s.pid", DAEMON_NAME);
 	//daemonize( "/tmp/", pid_file );
 
-	values = (struct valuePack*) malloc ( sizeof (struct valuePack) * (inputs + tempSensors));
+	values = (struct valuePack*) malloc(
+			sizeof(struct valuePack) * (inputs + tempSensors));
 
 	char buffer[BUF_LEN];
 	struct pollfd fds[inputs];
@@ -500,13 +451,14 @@ int main(void) {
 	curl_global_init(CURL_GLOBAL_ALL);
 	multihandle = curl_multi_init();
 
-	for (i=0; i<inputs; i++) {
+	for (i = 0; i < inputs; i++) {
 		printf("Current: %d\n", i);
-		snprintf ( buffer, BUF_LEN, "/sys/class/gpio/gpio%d/value", gpio_pin_id[i] );
+		snprintf(buffer, BUF_LEN, "/sys/class/gpio/gpio%d/value",
+				gpio_pin_id[i]);
 
-		if((fds[i].fd = open(buffer, O_RDONLY|O_NONBLOCK)) == 0) {
+		if ((fds[i].fd = open(buffer, O_RDONLY | O_NONBLOCK)) == 0) {
 
-			syslog(LOG_INFO,"Error:%s (%m)", buffer);
+			syslog(LOG_INFO, "Error:%s (%m)", buffer);
 			exit(1);
 
 		}
@@ -518,12 +470,12 @@ int main(void) {
 
 		curl_easy_setopt(easyhandle[i], CURLOPT_URL, url);
 		curl_easy_setopt(easyhandle[i], CURLOPT_POSTFIELDS, "");
-		curl_easy_setopt(easyhandle[i], CURLOPT_USERAGENT, DAEMON_NAME " " DAEMON_VERSION );
+		curl_easy_setopt(easyhandle[i], CURLOPT_USERAGENT,
+				DAEMON_NAME " " DAEMON_VERSION);
 		curl_easy_setopt(easyhandle[i], CURLOPT_WRITEDATA, devnull);
 		curl_easy_setopt(easyhandle[i], CURLOPT_ERRORBUFFER, errorBuffer);
 
 		curl_multi_add_handle(multihandle, easyhandle[i]);
-
 
 		values[i].numberOfValues = 0;
 		values[i].valuesAsSumm = 0;
@@ -531,8 +483,7 @@ int main(void) {
 		values[i].lastTs = 0;
 
 	}
-	for (i=inputs; i<(inputs+ tempSensors);i++ )
-	{
+	for (i = inputs; i < (inputs + tempSensors); i++) {
 		values[i].numberOfValues = 0;
 		values[i].valuesAsSumm = 0;
 		values[i].impulsConst = 1000;
@@ -542,33 +493,35 @@ int main(void) {
 	sem_init(&sem_averrage, 0, 1);
 	/* Thread erstellen für interval Berechnung*/
 	pthread_t intervalThread, intervalTemperaturThread;
-	if (pthread_create( &intervalThread, NULL, intervallFunction, (void *) &Mittelwertzeit ) != 0)
-	{
+	if (pthread_create(&intervalThread, NULL, intervallFunction,
+			(void *) &Mittelwertzeit) != 0) {
 		printf("Thread can not be create.");
 		exit(1);
 	}
 
-	if (pthread_create( &intervalTemperaturThread, NULL, intervallTemperatur, (void *) &tempraturIntervall ) != 0)
-	{
+	if (pthread_create(&intervalTemperaturThread, NULL, intervallTemperatur,
+			(void *) &tempraturIntervall) != 0) {
 		printf("Thread can not be create.");
 		exit(1);
 	}
 
-	for ( ;; ) {
+	for (;;) {
 
-		if((multihandle_res = curl_multi_perform(multihandle, &running_handles)) != CURLM_OK) {
-		syslog(LOG_INFO, "HTTP_POST(): %s", curl_multi_strerror(multihandle_res) );
+		if ((multihandle_res = curl_multi_perform(multihandle, &running_handles))
+				!= CURLM_OK) {
+			syslog(LOG_INFO, "HTTP_POST(): %s",
+					curl_multi_strerror(multihandle_res));
 		}
 
 		int ret = poll(fds, inputs, 1000);
 
-		if(ret>0) {
+		if (ret > 0) {
 
-			for (i=0; i<inputs; i++) {
+			for (i = 0; i < inputs; i++) {
 				if (fds[i].revents & POLLPRI) {
-				len = read(fds[i].fd, buffer, BUF_LEN);
-				//update_curl_handle(vzuuid[i]);
-				update_average_values( &values[i]);
+					len = read(fds[i].fd, buffer, BUF_LEN);
+					//update_curl_handle(vzuuid[i]);
+					update_average_values(&values[i]);
 				}
 			}
 		}
