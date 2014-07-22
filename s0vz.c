@@ -331,6 +331,8 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
 	int i=0;
 	double averrage[inputs + tempSensors];
 	char str[200];
+	str[0] = '\0';
+
 	printf("Thread created\n");
 
 	while(1)
@@ -349,7 +351,6 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
 			values[i].numberOfValues = 0;
 			values[i].valuesAsSumm = 0;
 			sprintf(str,"%s%.3f;",str, averrage[i]);
-			printf("%d %s\n",i,str);
 		}
 		sem_post(&sem_averrage);
 
