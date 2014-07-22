@@ -60,6 +60,7 @@ int pidFilehandle, vzport, len, running_handles, rc, count, tempSensors;
 
 const char *Datafolder, *Messstellenname, *Impulswerte[6],*uuid, *W1Sensor[100];
 int Mittelwertzeit;
+int tempraturIntervall;
 
 
 char crc_ok[] = "YES";
@@ -244,6 +245,17 @@ void cfile() {
 	}
 	else
 	syslog(LOG_INFO, "Mittelwertzeit:%i", Mittelwertzeit);
+
+	if (!config_lookup_int(&cfg, "TempraturIntervall", &tempraturIntervall))
+	{
+		syslog(LOG_INFO, "Missing 'TempraturIntervall' setting in configuration file.");
+		config_destroy(&cfg);
+		daemonShutdown();
+		exit(EXIT_FAILURE);
+	}
+	else
+	syslog(LOG_INFO, "Mittelwertzeit:%i", tempraturIntervall);
+
 
 	for (i=0; i<inputs; i++)
 	{
@@ -536,7 +548,7 @@ int main(void) {
 		exit(1);
 	}
 
-	if (pthread_create( &intervalTemperaturThread, NULL, intervallTemperatur, (void *) &Mittelwertzeit ) != 0)
+	if (pthread_create( &intervalTemperaturThread, NULL, intervallTemperatur, (void *) &tempraturIntervall ) != 0)
 	{
 		printf("Thread can not be create.");
 		exit(1);
