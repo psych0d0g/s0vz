@@ -284,7 +284,7 @@ return ms_timestamp;
 //
 //}
 
-int appendToFile(char *filename, char *str)
+int appendToFile(const char *filename, char *str)
 {
 	FILE *fd;
 	struct stat st = {0};
@@ -361,7 +361,7 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
 		sem_post(&sem_averrage);
 
 		sprintf(str,"%s%c",str,'\n');
-		if (appendToFile(Datafolder , str) != 0)
+		if (appendToFile(Datafolder, str) != 0)
 		{
 			printf("Can not append to File %s.", "filename_noch_nicht_vergeben");
 		}
@@ -443,7 +443,7 @@ void ds1820init() {
 
 }
 
-double ds1820read(char *sensorid) {
+double ds1820read(const char *sensorid) {
 
 	FILE *fp;
 
