@@ -349,6 +349,7 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
 			values[i].numberOfValues = 0;
 			values[i].valuesAsSumm = 0;
 			sprintf(str,"%s%.3f;",str, averrage[i]);
+			printf("%s\n",str);
 		}
 		sem_post(&sem_averrage);
 
