@@ -440,12 +440,15 @@ void *intervallTemperatur(void *time) { // Der Type ist wichtig: void* als Param
 				returnValue = ds1820read(W1Sensor[i], &temp);
 				if (returnValue == 0)
 				{
+					printf("Sensor %d %s: Temperatur: %f abspeichern\n", i, W1Sensor[i], temp );
 					sem_wait(&sem_averrage);
 					values[inputs + SensorNumber].valuesAsSumm += temp;
 					values[inputs + SensorNumber].numberOfValues ++;
 					sem_post(&sem_averrage);
 					printf("Sensor %s: Temperatur: %f\n",W1Sensor[i], temp );
 				}
+				else
+					printf("Sensor %d %s: Temperatur: %f kann nicht abspeichert werden.\n", i, W1Sensor[i], temp );
 			}
 		}
 		SensorNumber++;
