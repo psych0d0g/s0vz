@@ -440,7 +440,7 @@ int main(void) {
 
 	char pid_file[16];
 	sprintf(pid_file, "/tmp/%s.pid", DAEMON_NAME);
-	//daemonize( "/tmp/", pid_file );
+	daemonize( "/tmp/", pid_file );
 
 	values = (struct valuePack*) malloc(
 			sizeof(struct valuePack) * (inputs + tempSensors));
