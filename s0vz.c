@@ -447,7 +447,7 @@ void ds1820init() {
 double ds1820read(const char *sensorid) {
 
 	FILE *fp;
-
+	printf("Lese Temperatur von %s.", sensorid);
 	sprintf(fn, "/sys/bus/w1/devices/%s/w1_slave", sensorid );
 
 	if  ( (fp = fopen ( fn, "r"  )) == NULL ) {
