@@ -292,8 +292,10 @@ int appendToFile(const char *filename, char *str)
 	FILE *fd;
 	struct stat st = {0};
 	struct tm* ptm;
-	char time_string[11];
+	char time_string[9];
+	char date_string[11];
 	char filepath[200];
+	char str2[200];
 
 	/* Create directory if not exist*/
 	if (stat(filename, &st) == -1) {
@@ -303,14 +305,16 @@ int appendToFile(const char *filename, char *str)
 	/* Filename ermitteln anhand des Datums */
 	gettimeofday (&tv, NULL);
 	ptm = localtime (&tv.tv_sec);
-	strftime (time_string, sizeof (time_string), "%Y-%m-%d", ptm);
-	sprintf(filepath,"%s/%s.csv",filename, time_string);
-	printf("Now will add to file: %s this string: %s",filepath, str);
+	strftime (date_string, sizeof (date_string), "%Y-%m-%d", ptm);
+	strftime (time_string, sizeof (time_string), "%H:%M:%S", ptm);
+	sprintf(filepath,"%s/%s.csv",filename, date_string);
+	sprintf(str2,"%s;%s", time_string, str);
+	printf("Now will add to file: %s this string: %s",filepath, str2);
 
 	fd = fopen(filepath, "a");
 	if (fd != NULL)
 	{
-		fputs(str, fd);
+		fputs(str2, fd);
 		fclose(fd);
 		return 0;
 	}
@@ -371,7 +375,6 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
 		{
 			printf("Can not append to File %s.", "filename_noch_nicht_vergeben");
 		}
-		printf("%s\n",str);
 		str[0] = '\0';
 
 	}
