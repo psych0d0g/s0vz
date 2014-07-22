@@ -329,7 +329,7 @@ void update_average_values(struct valuePack *vP) {
 void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Parameter und Rückgabe
 	int t = *((int*) time);
 	int i=0;
-	double averrage[6];
+	double averrage[inputs + tempSensors];
 	char str[200];
 	printf("Thread created\n");
 
