@@ -56,7 +56,7 @@ void daemonShutdown();
 void signal_handler(int sig);
 void daemonize(char *rundir, char *pidfile);
 
-int pidFilehandle, vzport, i, len, running_handles, rc, count;
+int pidFilehandle, vzport, len, running_handles, rc, count;
 
 const char *Datafolder, *Messstellenname, *Impulswerte[6],*uuid, *W1Sensor[100];
 int Mittelwertzeit;
@@ -196,7 +196,7 @@ void daemonize(char *rundir, char *pidfile) {
 }
 
 void cfile() {
-
+    int i = 0;
 	config_t cfg;
 
 	//config_setting_t *setting;
@@ -337,6 +337,7 @@ void update_average_values(struct valuePack *vP) {
 
 void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Parameter und Rückgabe
 	int t = *((int*) time);
+	int i=0;
 	double averrage[6];
 	char str[100];
 	printf("Thread created\n");
@@ -546,7 +547,7 @@ void *intervallTemperatur(void *time) { // Der Type ist wichtig: void* als Param
 }
 
 int main(void) {
-
+	int i=0;
 	//freopen( "/dev/null", "r", stdin);
 	//freopen( "/dev/null", "w", stdout);
 	//freopen( "/dev/null", "w", stderr);
