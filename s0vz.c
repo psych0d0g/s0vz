@@ -464,8 +464,9 @@ void *intervallTemperatur(void *time) { // Der Type ist wichtig: void* als Param
 				else
 					printf("Sensor %d %s: Temperatur: %f kann nicht abspeichert werden.\n", i, W1Sensor[i], temp );
 			}
+			SensorNumber++;
 		}
-		SensorNumber++;
+
 		sleep(t);
 	}
 	printf("Thread wird beendet\n");
