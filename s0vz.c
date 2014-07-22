@@ -39,6 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>              /* macros to report error conditions through error codes */
 #include <signal.h>             /* signal processing */
 #include <stddef.h>             /* defines the macros NULL and offsetof as well as the types ptrdiff_t, wchar_t, and size_t */
+#include <dirent.h>				/* constructs that facilitate directory traversing */
 
 #include <libconfig.h>          /* reading, manipulating, and writing structured configuration files */
 #include <curl/curl.h>          /* multiprotocol file transfer library */
@@ -55,14 +56,22 @@ void daemonShutdown();
 void signal_handler(int sig);
 void daemonize(char *rundir, char *pidfile);
 
-int pidFilehandle, vzport, i, len, running_handles, rc;
+int pidFilehandle, vzport, i, len, running_handles, rc, count;
 
-const char *Datafolder, *Messstellenname, *Impulswerte[6];
+const char *Datafolder, *Messstellenname, *Impulswerte[6],*uuid, *W1Sensor[100];
 int Mittelwertzeit;
+
+char sensorid[3][32][17], vzuuid[3][32][64], crc_buffer[64], temp_buffer[64], fn[128];
+char crc_ok[] = "YES";
+char not_found[] = "not found.";
 
 char gpio_pin_id[] = { 17, 18, 27, 22, 23, 24 }, url[128];
 
 int inputs = sizeof(gpio_pin_id)/sizeof(gpio_pin_id[0]);
+
+
+double temp;
+config_t cfg;
 
 struct timeval tv;
 
@@ -245,6 +254,14 @@ void cfile() {
 		syslog ( LOG_INFO, "%s = %s", gpio, Impulswerte[i] );
 	}
 
+	for (i=0; i<100; i++)
+	{
+		char name[8];
+		sprintf ( name, "W1Dev%01d", i );
+		if ( config_lookup_string( &cfg, name, &W1Sensor[i]) == CONFIG_TRUE )
+			syslog ( LOG_INFO, "%s = %s", name, W1Sensor[i] );
+	}
+
 }
 
 unsigned long long unixtime() {
@@ -356,16 +373,173 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
     return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
 }
 
+/***********************************
+/* Beginn der Temperatur Funktionen
+/**********************************/
+
+
+int count_i2cdevices() {
+
+	int i2cdevices = 0;
+	DIR * dirp;
+	struct dirent * entry;
+
+	dirp = opendir("/sys/bus/i2c/devices/");
+	if (!dirp) {
+		syslog ( LOG_INFO, "Error: /sys/bus/i2c/devices not found! Check kernelmodul!" );
+		daemonShutdown();
+	}
+
+	while ((entry = readdir(dirp)) != NULL) {
+		if (entry->d_type == DT_LNK) {
+			//TODO nur hinzufügen wenn in /sys/bus/i2c/devices/ORDNER/name ds2482 steht
+			i2cdevices++;
+		}
+	}
+	printf ("Es wurden %d I2C Divices gefunden.",i2cdevices);
+	closedir(dirp);
+
+	return i2cdevices-2; //TODO anpassen wenn alle ds2482 gefunden wurden
+}
+
+void ds1820init() {
+
+	int i = 0;
+	for (i=1; i<=count_i2cdevices(); i++) {
+
+		char fn[64];
+		sprintf ( fn, "/sys/bus/w1/devices/w1_bus_master%d/w1_master_slaves", i );
+
+		FILE *fp;
+		if  ( (fp = fopen ( fn, "r" )) == NULL ) {
+		syslog(LOG_INFO, "%s", strerror(errno));
+		}
+		else
+		{
+			count = 1;
+
+			while ( fgets ( sensorid[i][count], sizeof(sensorid[i][count]), fp ) != NULL ) {
+			sensorid[i][count][strlen(sensorid[i][count])-1] = '\0';
+
+				if ( ! ( strstr ( sensorid[i][count], not_found ) )) {
+
+					char buffer[32];
+					sprintf ( buffer, "*%s", sensorid[i][count] );
+					if ( config_lookup_string( &cfg, buffer, &uuid ) == CONFIG_TRUE )
+					strcpy(vzuuid[i][count], uuid);
+				}
+
+			if ( ! ( strstr ( sensorid[i][count], not_found ) )) {
+			syslog( LOG_INFO, "%s (Bus: %d) (VzUUID: %s)", sensorid[i][count], i, vzuuid[i][count] );
+			}
+
+			count++;
+			}
+		}
+
+	if (fp != NULL)
+		fclose ( fp );
+	}
+
+}
+
+double ds1820read(char *sensorid) {
+
+	FILE *fp;
+
+	sprintf(fn, "/sys/bus/w1/devices/%s/w1_slave", sensorid );
+
+	if  ( (fp = fopen ( fn, "r"  )) == NULL ) {
+	return(-1);
+	}
+
+	else
+
+	{
+
+		fgets( crc_buffer, sizeof(crc_buffer), fp );
+		if ( !strstr ( crc_buffer, crc_ok ) )
+	 	{
+
+			syslog(LOG_INFO, "CRC check failed, SensorID: %s", sensorid);
+
+		fclose ( fp );
+		return(-1);
+		}
+
+		else
+
+		{
+
+		fgets( temp_buffer, sizeof(temp_buffer), fp );
+		fgets( temp_buffer, sizeof(temp_buffer), fp );
+
+		/**************************************************************************
+		char *t;
+		t = strndup ( temp_buffer +29, 5 ) ;
+		temp = atof(t)/1000;
+		**************************************************************************/
+
+		char *pos = strstr(temp_buffer, "t=");
+
+		if (pos == NULL)
+			return -1;
+
+		pos += 2;
+
+		temp = atof(pos)/1000;
+		fclose ( fp );
+		printf("Sensor %s: Temperatur: %f",sensorid, temp );
+		//http_post(temp, vzuuid[i][count]);
+		}
+	}
+}
+
 void *intervallTemperatur(void *time) { // Der Type ist wichtig: void* als Parameter und Rückgabe
 	int t = *((int*) time);
 
-   printf("Thread created\n");
+   printf("Temperatur Thread created\n");
 
 	while(1)
 	{
+//		i = 0;
+//		for (i=1; i<=count_i2cdevices(); i++) {
+//
+//			sprintf ( fn, "/sys/bus/w1/devices/w1_bus_master%d/w1_master_slaves", i );
+//
+//			FILE *fp;
+//			if  ( (fp = fopen ( fn, "r" )) == NULL )
+//			{
+//			syslog(LOG_INFO, "%s", strerror(errno));
+//			}
+//			else
+//			{
+//
+//				count = 1;
+//				while ( fgets ( sensorid[i][count], sizeof(sensorid[i][count]), fp ) != NULL ) {
+//				sensorid[i][count][strlen(sensorid[i][count])-1] = '\0';
+//
+//					if ( !( strstr ( sensorid[i][count], not_found ) )) {
+//					ds1820read(sensorid[i][count]);
+//
+//					}
+//
+//				count++;
+//				}
+//
+//			}
+//
+//		if (fp != NULL)
+//			fclose ( fp );
+//		}
+
+		for (i=0; i<=100; i++) {
+			if ( W1Sensor[i] != NULL )
+			{
+				ds1820read(W1Sensor[i]);
+			}
+		}
 		sleep(t);
-
-
 	}
 	printf("Thread wird beendet\n");
     return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
@@ -394,8 +568,14 @@ int main(void) {
 
 	sem_init(&sem_averrage, 0, 1);
 	/* Thread erstellen für interval Berechnung*/
-	pthread_t intervalThread;
+	pthread_t intervalThread, intervalTemperaturThread;
 	if (pthread_create( &intervalThread, NULL, intervallFunction, (void *) &Mittelwertzeit ) != 0)
+	{
+		printf("Thread can not be create.");
+		exit(1);
+	}
+
+	if (pthread_create( &intervalTemperaturThread, NULL, intervallTemperatur, (void *) &Mittelwertzeit ) != 0)
 	{
 		printf("Thread can not be create.");
 		exit(1);
