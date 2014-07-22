@@ -434,7 +434,7 @@ void *intervallTemperatur(void *time) { // Der Type ist wichtig: void* als Param
 	while(1)
 	{
 		SensorNumber = 0;
-		for (i=0; i<=100; i++) {
+		for (i=0; i<100; i++) {
 			if ( W1Sensor[i] != NULL )
 			{
 				returnValue = ds1820read(W1Sensor[i], &temp);
@@ -516,6 +516,13 @@ int main(void) {
 		values[i].impulsConst = 1000;
 		values[i].lastTs = 0;
 
+	}
+	for (i=inputs; i<(inputs+ tempSensors);i++ )
+	{
+		values[i].numberOfValues = 0;
+		values[i].valuesAsSumm = 0;
+		values[i].impulsConst = 1000;
+		values[i].lastTs = 0;
 	}
 
 	sem_init(&sem_averrage, 0, 1);
