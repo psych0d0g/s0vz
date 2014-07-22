@@ -56,12 +56,12 @@ void daemonShutdown();
 void signal_handler(int sig);
 void daemonize(char *rundir, char *pidfile);
 
-int pidFilehandle, vzport, len, running_handles, rc, count;
+int pidFilehandle, vzport, len, running_handles, rc, count, tempSensors;
 
 const char *Datafolder, *Messstellenname, *Impulswerte[6],*uuid, *W1Sensor[100];
 int Mittelwertzeit;
 
-char sensorid[3][32][17], vzuuid[3][32][64], crc_buffer[64], temp_buffer[64], fn[128];
+
 char crc_ok[] = "YES";
 char not_found[] = "not found.";
 
@@ -77,16 +77,15 @@ struct timeval tv;
 
 struct valuePack
 {
-	char vzuuid[64];
 	double valuesAsSumm;
 	int numberOfValues;
 	int impulsConst;
 	long lastTs;
 };
 
-struct valuePack values[6];
-sem_t sem_averrage;
+struct valuePack *values;
 
+sem_t sem_averrage;
 
 CURL *easyhandle[sizeof(gpio_pin_id)/sizeof(gpio_pin_id[0])];
 CURLM *multihandle;
@@ -254,12 +253,16 @@ void cfile() {
 		syslog ( LOG_INFO, "%s = %s", gpio, Impulswerte[i] );
 	}
 
+	tempSensors = 0;
 	for (i=0; i<100; i++)
 	{
 		char name[8];
 		sprintf ( name, "W1Dev%01d", i );
 		if ( config_lookup_string( &cfg, name, &W1Sensor[i]) == CONFIG_TRUE )
+		{
 			syslog ( LOG_INFO, "%s = %s", name, W1Sensor[i] );
+			tempSensors++;
+		}
 	}
 
 }
@@ -271,18 +274,6 @@ unsigned long long unixtime() {
 
 return ms_timestamp;
 }
-
-//void update_curl_handle(const char *vzuuid) {
-//
-//		curl_multi_remove_handle(multihandle, easyhandle[i]);
-//
-//		sprintf(url, "http://%s:%d/%s/data/%s.json?ts=%llu", vzserver, vzport, vzpath, vzuuid, unixtime());
-//
-//		curl_easy_setopt(easyhandle[i], CURLOPT_URL, url);
-//
-//		curl_multi_add_handle(multihandle, easyhandle[i]);
-//
-//}
 
 int appendToFile(const char *filename, char *str)
 {
@@ -339,14 +330,14 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
 	int t = *((int*) time);
 	int i=0;
 	double averrage[6];
-	char str[100];
+	char str[200];
 	printf("Thread created\n");
 
 	while(1)
 	{
 		sleep(t);
 		sem_wait(&sem_averrage);
-		for (i=0; i<inputs; i++) {
+		for (i=0; i<(inputs + tempSensors); i++) {
 			if (values[i].numberOfValues > 0 )
 			{
 				averrage[i] = values[i].valuesAsSumm / values[i].numberOfValues;
@@ -374,88 +365,23 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
     return NULL;  // oder in C++: return 0;// Damit kann man Werte zurückgeben
 }
 
-/***********************************
-/* Beginn der Temperatur Funktionen
-/**********************************/
+/** *********************************
+ *Beginn der Temperatur Funktionen
+ */
 
 
-int count_i2cdevices() {
-
-	int i2cdevices = 0;
-	DIR * dirp;
-	struct dirent * entry;
-
-	dirp = opendir("/sys/bus/i2c/devices/");
-	if (!dirp) {
-		syslog ( LOG_INFO, "Error: /sys/bus/i2c/devices not found! Check kernelmodul!" );
-		daemonShutdown();
-	}
-
-	while ((entry = readdir(dirp)) != NULL) {
-		if (entry->d_type == DT_LNK) {
-			//TODO nur hinzufügen wenn in /sys/bus/i2c/devices/ORDNER/name ds2482 steht
-			i2cdevices++;
-		}
-	}
-	printf ("Es wurden %d I2C Divices gefunden.",i2cdevices);
-	closedir(dirp);
-
-	return i2cdevices-2; //TODO anpassen wenn alle ds2482 gefunden wurden
-}
-
-void ds1820init() {
-
-	int i = 0;
-	for (i=1; i<=count_i2cdevices(); i++) {
-
-		char fn[64];
-		sprintf ( fn, "/sys/bus/w1/devices/w1_bus_master%d/w1_master_slaves", i );
-
-		FILE *fp;
-		if  ( (fp = fopen ( fn, "r" )) == NULL ) {
-		syslog(LOG_INFO, "%s", strerror(errno));
-		}
-		else
-		{
-			count = 1;
-
-			while ( fgets ( sensorid[i][count], sizeof(sensorid[i][count]), fp ) != NULL ) {
-			sensorid[i][count][strlen(sensorid[i][count])-1] = '\0';
-
-				if ( ! ( strstr ( sensorid[i][count], not_found ) )) {
-
-					char buffer[32];
-					sprintf ( buffer, "*%s", sensorid[i][count] );
-					if ( config_lookup_string( &cfg, buffer, &uuid ) == CONFIG_TRUE )
-					strcpy(vzuuid[i][count], uuid);
-				}
-
-			if ( ! ( strstr ( sensorid[i][count], not_found ) )) {
-			syslog( LOG_INFO, "%s (Bus: %d) (VzUUID: %s)", sensorid[i][count], i, vzuuid[i][count] );
-			}
-
-			count++;
-			}
-		}
-
-	if (fp != NULL)
-		fclose ( fp );
-	}
-
-}
-
-double ds1820read(const char *sensorid) {
+int ds1820read(const char *sensorid, double *temp) {
 
 	FILE *fp;
-	printf("Lese Temperatur von %s.", sensorid);
+	char crc_buffer[64], temp_buffer[64], fn[128];
+
+	printf("Lese Temperatur von %s.\n", sensorid);
 	sprintf(fn, "/sys/bus/w1/devices/%s/w1_slave", sensorid );
 
 	if  ( (fp = fopen ( fn, "r"  )) == NULL ) {
-	return(-1);
+		return (-1);
 	}
-
 	else
-
 	{
 
 		fgets( crc_buffer, sizeof(crc_buffer), fp );
@@ -488,10 +414,11 @@ double ds1820read(const char *sensorid) {
 
 		pos += 2;
 
-		temp = atof(pos)/1000;
+		*temp = atof(pos)/1000;
 		fclose ( fp );
-		printf("Sensor %s: Temperatur: %f\n",sensorid, temp );
+
 		//http_post(temp, vzuuid[i][count]);
+		return 0;
 		}
 	}
 }
@@ -499,47 +426,29 @@ double ds1820read(const char *sensorid) {
 void *intervallTemperatur(void *time) { // Der Type ist wichtig: void* als Parameter und Rückgabe
 	int t = *((int*) time);
 	int i = 0;
+	int SensorNumber = 0;
+	double temp;
+	int returnValue;
     printf("Temperatur Thread created\n");
 
 	while(1)
 	{
-//		i = 0;
-//		for (i=1; i<=count_i2cdevices(); i++) {
-//
-//			sprintf ( fn, "/sys/bus/w1/devices/w1_bus_master%d/w1_master_slaves", i );
-//
-//			FILE *fp;
-//			if  ( (fp = fopen ( fn, "r" )) == NULL )
-//			{
-//			syslog(LOG_INFO, "%s", strerror(errno));
-//			}
-//			else
-//			{
-//
-//				count = 1;
-//				while ( fgets ( sensorid[i][count], sizeof(sensorid[i][count]), fp ) != NULL ) {
-//				sensorid[i][count][strlen(sensorid[i][count])-1] = '\0';
-//
-//					if ( !( strstr ( sensorid[i][count], not_found ) )) {
-//					ds1820read(sensorid[i][count]);
-//
-//					}
-//
-//				count++;
-//				}
-//
-//			}
-//
-//		if (fp != NULL)
-//			fclose ( fp );
-//		}
-
+		SensorNumber = 0;
 		for (i=0; i<=100; i++) {
 			if ( W1Sensor[i] != NULL )
 			{
-				ds1820read(W1Sensor[i]);
+				returnValue = ds1820read(W1Sensor[i], &temp);
+				if (returnValue == 0)
+				{
+					sem_wait(&sem_averrage);
+					values[inputs + SensorNumber].valuesAsSumm += temp;
+					values[inputs + SensorNumber].numberOfValues ++;
+					sem_post(&sem_averrage);
+					printf("Sensor %s: Temperatur: %f\n",W1Sensor[i], temp );
+				}
 			}
 		}
+		SensorNumber++;
 		sleep(t);
 	}
 	printf("Thread wird beendet\n");
@@ -566,6 +475,45 @@ int main(void) {
 	sprintf ( pid_file, "/tmp/%s.pid", DAEMON_NAME );
 	//daemonize( "/tmp/", pid_file );
 
+	values = (struct valuePack*) malloc ( sizeof (struct valuePack) * (inputs + tempSensors));
+
+	char buffer[BUF_LEN];
+	struct pollfd fds[inputs];
+
+	curl_global_init(CURL_GLOBAL_ALL);
+	multihandle = curl_multi_init();
+
+	for (i=0; i<inputs; i++) {
+		printf("Current: %d\n", i);
+		snprintf ( buffer, BUF_LEN, "/sys/class/gpio/gpio%d/value", gpio_pin_id[i] );
+
+		if((fds[i].fd = open(buffer, O_RDONLY|O_NONBLOCK)) == 0) {
+
+			syslog(LOG_INFO,"Error:%s (%m)", buffer);
+			exit(1);
+
+		}
+
+		fds[i].events = POLLPRI;
+		fds[i].revents = 0;
+
+		easyhandle[i] = curl_easy_init();
+
+		curl_easy_setopt(easyhandle[i], CURLOPT_URL, url);
+		curl_easy_setopt(easyhandle[i], CURLOPT_POSTFIELDS, "");
+		curl_easy_setopt(easyhandle[i], CURLOPT_USERAGENT, DAEMON_NAME " " DAEMON_VERSION );
+		curl_easy_setopt(easyhandle[i], CURLOPT_WRITEDATA, devnull);
+		curl_easy_setopt(easyhandle[i], CURLOPT_ERRORBUFFER, errorBuffer);
+
+		curl_multi_add_handle(multihandle, easyhandle[i]);
+
+
+		values[i].numberOfValues = 0;
+		values[i].valuesAsSumm = 0;
+		values[i].impulsConst = 1000;
+		values[i].lastTs = 0;
+
+	}
 
 	sem_init(&sem_averrage, 0, 1);
 	/* Thread erstellen für interval Berechnung*/
@@ -582,65 +530,27 @@ int main(void) {
 		exit(1);
 	}
 
-	char buffer[BUF_LEN];
-		struct pollfd fds[inputs];
+	for ( ;; ) {
 
-		curl_global_init(CURL_GLOBAL_ALL);
-		multihandle = curl_multi_init();
-
-		for (i=0; i<inputs; i++) {
-			printf("Current: %d\n", i);
-			snprintf ( buffer, BUF_LEN, "/sys/class/gpio/gpio%d/value", gpio_pin_id[i] );
-
-			if((fds[i].fd = open(buffer, O_RDONLY|O_NONBLOCK)) == 0) {
-
-				syslog(LOG_INFO,"Error:%s (%m)", buffer);
-				exit(1);
-
-			}
-
-			fds[i].events = POLLPRI;
-			fds[i].revents = 0;
-
-			easyhandle[i] = curl_easy_init();
-
-			curl_easy_setopt(easyhandle[i], CURLOPT_URL, url);
-			curl_easy_setopt(easyhandle[i], CURLOPT_POSTFIELDS, "");
-			curl_easy_setopt(easyhandle[i], CURLOPT_USERAGENT, DAEMON_NAME " " DAEMON_VERSION );
-			curl_easy_setopt(easyhandle[i], CURLOPT_WRITEDATA, devnull);
-			curl_easy_setopt(easyhandle[i], CURLOPT_ERRORBUFFER, errorBuffer);
-
-			curl_multi_add_handle(multihandle, easyhandle[i]);
-
-			strcpy(values[i].vzuuid, Impulswerte[i]);
-			values[i].numberOfValues = 0;
-			values[i].valuesAsSumm = 0;
-			values[i].impulsConst = 1000;
-			values[i].lastTs = 0;
-
+		if((multihandle_res = curl_multi_perform(multihandle, &running_handles)) != CURLM_OK) {
+		syslog(LOG_INFO, "HTTP_POST(): %s", curl_multi_strerror(multihandle_res) );
 		}
 
-			for ( ;; ) {
+		int ret = poll(fds, inputs, 1000);
 
-				if((multihandle_res = curl_multi_perform(multihandle, &running_handles)) != CURLM_OK) {
-				syslog(LOG_INFO, "HTTP_POST(): %s", curl_multi_strerror(multihandle_res) );
-				}
+		if(ret>0) {
 
-				int ret = poll(fds, inputs, 1000);
-
-				if(ret>0) {
-
-					for (i=0; i<inputs; i++) {
-						if (fds[i].revents & POLLPRI) {
-						len = read(fds[i].fd, buffer, BUF_LEN);
-						//update_curl_handle(vzuuid[i]);
-						update_average_values( &values[i]);
-						}
-					}
+			for (i=0; i<inputs; i++) {
+				if (fds[i].revents & POLLPRI) {
+				len = read(fds[i].fd, buffer, BUF_LEN);
+				//update_curl_handle(vzuuid[i]);
+				update_average_values( &values[i]);
 				}
 			}
+		}
+	}
 
-		curl_global_cleanup();
+	curl_global_cleanup();
 
-return 0;
+	return 0;
 }
