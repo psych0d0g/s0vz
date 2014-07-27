@@ -5,8 +5,16 @@
  https://github.com/w3llschmidt/s0vz.git
 
  Henrik Wellschmidt  <w3llschmidt@gmail.com>
+ René Galow <rensky.g@googlemail.com>
 
  **************************************************************************/
+
+/***************************************************************************
+ * Compileranweisungen
+ */
+
+#define ENTWICKLUNG
+/**************************************************************************/
 
 #define DAEMON_NAME "s0vz"
 #define DAEMON_VERSION "1.4"
@@ -56,10 +64,10 @@ void signal_handler(int sig);
 void daemonize(char *rundir, char *pidfile);
 
 int pidFilehandle, vzport, len, running_handles, rc, count, tempSensors;
-
-const char *Datafolder, *Messstellenname, *Impulswerte[6], *uuid,
+int LogLevel;
+const char *Datafolder, *Messstellenname, *uuid,
 		*W1Sensor[100];
-int Mittelwertzeit;
+int Mittelwertzeit, Impulswerte[6];
 int tempraturIntervall;
 
 char crc_ok[] = "YES";
@@ -196,8 +204,12 @@ void cfile() {
 
 	//chdir ("/etc");
 	char configfile[200];
-	sprintf(configfile, "%s%s%s", "/etc/", DAEMON_NAME, ".cfg");
 
+	#ifdef ENTWICKLUNG
+	sprintf(configfile, "%s%s", DAEMON_NAME, ".cfg");
+	#else
+	sprintf(configfile, "%s%s%s", "/etc/", DAEMON_NAME, ".cfg");
+	#endif
 	if (!config_read_file(&cfg, configfile)) {
 		syslog(LOG_INFO, "Config error > %s - %s\n", config_error_file(&cfg),
 				config_error_text(&cfg));
@@ -229,7 +241,13 @@ void cfile() {
 		daemonShutdown();
 		exit(EXIT_FAILURE);
 	} else
-		syslog(LOG_INFO, "Mittelwertzeit:%i", Mittelwertzeit);
+		syslog(LOG_INFO, "Mittelwertzeit:%d", Mittelwertzeit);
+
+	if (!config_lookup_int(&cfg, "LogLevel", &LogLevel)) {
+		syslog(LOG_INFO, "Missing 'LogLevel' setting in configuration file.");
+		LogLevel = 4;
+	} else
+		syslog(LOG_INFO, "LogLevel = %d", LogLevel);
 
 	if (!config_lookup_int(&cfg, "TempraturIntervall", &tempraturIntervall)) {
 		syslog(LOG_INFO,
@@ -238,13 +256,13 @@ void cfile() {
 		daemonShutdown();
 		exit(EXIT_FAILURE);
 	} else
-		syslog(LOG_INFO, "Mittelwertzeit:%i", tempraturIntervall);
+		syslog(LOG_INFO, "TempraturIntervall:%i", tempraturIntervall);
 
 	for (i = 0; i < inputs; i++) {
 		char gpio[6];
 		sprintf(gpio, "GPIO%01d", i);
-		if (config_lookup_string(&cfg, gpio, &Impulswerte[i]) == CONFIG_TRUE)
-			syslog( LOG_INFO, "%s = %s", gpio, Impulswerte[i]);
+		if (config_lookup_int(&cfg, gpio, &Impulswerte[i]) == CONFIG_TRUE)
+			syslog( LOG_INFO, "%s = %d", gpio, Impulswerte[i]);
 	}
 
 	tempSensors = 0;
@@ -256,6 +274,18 @@ void cfile() {
 			tempSensors++;
 		}
 	}
+
+}
+
+void logPrint(char *msg, unsigned int level)
+{
+	char date_time_string[20];
+	struct tm* ptm;
+	gettimeofday(&tv, NULL);
+	ptm = localtime(&tv.tv_sec);
+	strftime(date_time_string, sizeof(date_time_string), "%Y-%m-%d %H:%M:%S",ptm);
+	if (level >= LogLevel )
+		printf("[%s] [%d] %s",date_time_string, level, msg);
 
 }
 
@@ -289,7 +319,7 @@ int appendToFile(const char *filename, char *str) {
 	strftime(date_time_string, sizeof(date_time_string), "%Y-%m-%d %H:%M:%S",
 			ptm);
 	sprintf(filepath, "%s/%s.csv", filename, date_string);
-	sprintf(str2, "%s;%s", date_time_string, str);
+	sprintf(str2, "%s;%s\n", date_time_string, str);
 	printf("Now will add to file: %s this string: %s", filepath, str2);
 
 	fd = fopen(filepath, "a");
@@ -346,7 +376,12 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
 		}
 		sem_post(&sem_averrage);
 
-		sprintf(str, "%s%c", str, '\n');
+		sprintf(str, "%s", str);
+
+		size_t len = strlen(str);
+		if(len>0)
+		  str[len-1] = '\0';
+
 		if (appendToFile(Datafolder, str) != 0) {
 			printf("Can not append to File %s.",
 					"filename_noch_nicht_vergeben");
@@ -440,7 +475,11 @@ int main(void) {
 
 	char pid_file[16];
 	sprintf(pid_file, "/tmp/%s.pid", DAEMON_NAME);
+
+	#ifdef ENTWICKLUNG
+	#else
 	daemonize( "/tmp/", pid_file );
+	#endif
 
 	values = (struct valuePack*) malloc(
 			sizeof(struct valuePack) * (inputs + tempSensors));
@@ -452,7 +491,6 @@ int main(void) {
 	multihandle = curl_multi_init();
 
 	for (i = 0; i < inputs; i++) {
-		printf("Current: %d\n", i);
 		snprintf(buffer, BUF_LEN, "/sys/class/gpio/gpio%d/value",
 				gpio_pin_id[i]);
 
@@ -479,14 +517,15 @@ int main(void) {
 
 		values[i].numberOfValues = 0;
 		values[i].valuesAsSumm = 0;
-		values[i].impulsConst = 1000;
+		values[i].impulsConst = Impulswerte[i];
 		values[i].lastTs = 0;
 
 	}
+
 	for (i = inputs; i < (inputs + tempSensors); i++) {
 		values[i].numberOfValues = 0;
 		values[i].valuesAsSumm = 0;
-		values[i].impulsConst = 1000;
+		values[i].impulsConst = 0;
 		values[i].lastTs = 0;
 	}
 
