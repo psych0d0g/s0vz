@@ -37,6 +37,7 @@
 
  **************************************************************************/
 
+#include "EnOcean.h"
 #include <stdio.h>              /* standard library functions for file input and output */
 #include <stdlib.h>             /* standard library for the C programming language, */
 #include <string.h>             /* functions implementing operations on strings  */
@@ -49,13 +50,21 @@
 #include <stddef.h>             /* defines the macros NULL and offsetof as well as the types ptrdiff_t, wchar_t, and size_t */
 #include <dirent.h>				/* constructs that facilitate directory traversing */
 
-#include <libconfig.h>          /* reading, manipulating, and writing structured configuration files */
+#include <libconfig.h++>          /* reading, manipulating, and writing structured configuration files */
 #include <curl/curl.h>          /* multiprotocol file transfer library */
 #include <poll.h>			/* wait for events on file descriptors */
 #include <pthread.h>
 #include <semaphore.h>
+#include <string>
+#include <iostream>     // std::cout
+#include <sstream>
 
 #include <sys/ioctl.h>		/* */
+
+using namespace std;
+using namespace libconfig;
+
+#define ENOCEAN_DEVICE "/dev/ttyUSB0"
 
 #define BUF_LEN 64
 
@@ -63,12 +72,14 @@ void daemonShutdown();
 void signal_handler(int sig);
 void daemonize(char *rundir, char *pidfile);
 
-int pidFilehandle, vzport, len, running_handles, rc, count, tempSensors;
+int pidFilehandle, vzport, len, running_handles, rc, count, tempSensors, enOceanNumberSensors;
 int LogLevel;
-const char *Datafolder, *Messstellenname, *uuid,
-		*W1Sensor[100];
-int Mittelwertzeit, Impulswerte[6];
-int tempraturIntervall;
+const char *Datafolder, *Messstellenname, *uuid;
+const char *W1Sensor[100];
+const char *EnOceanSensor[100], *EnOceanTemperaturbereich[100];
+int Mittelwertzeit = 0;
+int Impulswerte[6];
+int tempraturIntervall = 0;
 
 char crc_ok[] = "YES";
 char not_found[] = "not found.";
@@ -78,7 +89,7 @@ char gpio_pin_id[] = { 17, 18, 27, 22, 23, 24 }, url[128];
 int inputs = sizeof(gpio_pin_id) / sizeof(gpio_pin_id[0]);
 
 double temp;
-config_t cfg;
+Config cfg;
 
 struct timeval tv;
 
@@ -192,89 +203,154 @@ void daemonize(char *rundir, char *pidfile) {
 	write(pidFilehandle, str, strlen(str));
 }
 
-void cfile() {
+int cfile() {
 	int i = 0;
-	config_t cfg;
+	Config cfg;
 
 	//config_setting_t *setting;
 
-	config_init(&cfg);
+	//config_init(&cfg);
 
-	int chdir(const char *path);
+	//int chdir(const char *path);
 
 	//chdir ("/etc");
-	char configfile[200];
-
+	//char configfile[200];
+	std::stringstream configfile;
 	#ifdef ENTWICKLUNG
-	sprintf(configfile, "%s%s", DAEMON_NAME, ".cfg");
+	//sprintf(configfile, "%s%s", DAEMON_NAME, ".cfg");
+
+	configfile << "./s0vz" << ".cfg";
 	#else
-	sprintf(configfile, "%s%s%s", "/etc/", DAEMON_NAME, ".cfg");
+	//sprintf(configfile, "%s%s%s", "/etc/", DAEMON_NAME, ".cfg");
+	configfile << "/etc/" << DAEMON_NAME << ".cfg";
 	#endif
-	if (!config_read_file(&cfg, configfile)) {
-		syslog(LOG_INFO, "Config error > %s - %s\n", config_error_file(&cfg),
-				config_error_text(&cfg));
-		config_destroy(&cfg);
+
+	try
+	{
+		cfg.readFile(configfile.str().c_str());
+	}
+	catch(const FileIOException &fioex)
+	{
+		std::cerr << "I/O error while reading file." << std::endl;
 		daemonShutdown();
-		exit(EXIT_FAILURE);
+		return(EXIT_FAILURE);
+	}
+	catch(const ParseException &pex)
+	{
+	    std::cerr << "Parse error at " << pex.getFile() << ":" << pex.getLine() << " - " << pex.getError() << std::endl;
+		return(EXIT_FAILURE);
 	}
 
-	if (!config_lookup_string(&cfg, "Datafolder", &Datafolder)) {
-		syslog(LOG_INFO, "Missing 'Datafolder' setting in configuration file.");
-		config_destroy(&cfg);
-		daemonShutdown();
-		exit(EXIT_FAILURE);
-	} else
-		syslog(LOG_INFO, "Datafolder:%s", Datafolder);
+	try
+	{
+		 cfg.lookupValue("Datafolder", Datafolder);
+		 syslog(LOG_INFO, "Datafolder:%s", Datafolder);
+	}
+	catch(const SettingNotFoundException &nfex)
+	{
+		cerr << "No Datafolder setting in configuration file." << endl;
+	}
 
-	if (!config_lookup_string(&cfg, "Messstelle", &Messstellenname)) {
-		syslog(LOG_INFO, "Missing 'Messstelle' setting in configuration file.");
-		config_destroy(&cfg);
-		daemonShutdown();
-		exit(EXIT_FAILURE);
-	} else
+	try
+	{
+		cfg.lookupValue("Messstelle", Messstellenname);
 		syslog(LOG_INFO, "Messstelle:%s", Messstellenname);
+	}
+	catch(const SettingNotFoundException &nfex)
+	{
+		cerr << "No Messstelle setting in configuration file." << endl;
+	}
 
-	if (!config_lookup_int(&cfg, "Mittelwertzeit", &Mittelwertzeit)) {
-		syslog(LOG_INFO,
-				"Missing 'Mittelwertzeit' setting in configuration file.");
-		config_destroy(&cfg);
-		daemonShutdown();
-		exit(EXIT_FAILURE);
-	} else
+	try
+	{
+		cfg.lookupValue("Mittelwertzeit", Mittelwertzeit);
 		syslog(LOG_INFO, "Mittelwertzeit:%d", Mittelwertzeit);
+	}
+	catch(const SettingNotFoundException &nfex)
+	{
+		cerr << "No Mittelwertzeit setting in configuration file." << endl;
+	}
 
-	if (!config_lookup_int(&cfg, "LogLevel", &LogLevel)) {
-		syslog(LOG_INFO, "Missing 'LogLevel' setting in configuration file.");
+	try
+	{
+		cfg.lookupValue("LogLevel", LogLevel);
+		syslog(LOG_INFO, "v:%d", LogLevel);
+	}
+	catch(const SettingNotFoundException &nfex)
+	{
 		LogLevel = 4;
-	} else
-		syslog(LOG_INFO, "LogLevel = %d", LogLevel);
+		cerr << "No LogLevel setting in configuration file." << endl;
+	}
 
-	if (!config_lookup_int(&cfg, "TempraturIntervall", &tempraturIntervall)) {
-		syslog(LOG_INFO,
-				"Missing 'TempraturIntervall' setting in configuration file.");
-		config_destroy(&cfg);
-		daemonShutdown();
-		exit(EXIT_FAILURE);
-	} else
-		syslog(LOG_INFO, "TempraturIntervall:%i", tempraturIntervall);
+	try
+	{
+		cfg.lookupValue("TempraturIntervall",tempraturIntervall);
+		syslog(LOG_INFO, "v:%d", tempraturIntervall);
+	}
+	catch(const SettingNotFoundException &nfex)
+	{
+		cerr << "No TempraturIntervall setting in configuration file." << endl;
+	}
 
+	stringstream name;
 	for (i = 0; i < inputs; i++) {
-		char gpio[6];
-		sprintf(gpio, "GPIO%01d", i);
-		if (config_lookup_int(&cfg, gpio, &Impulswerte[i]) == CONFIG_TRUE)
-			syslog( LOG_INFO, "%s = %d", gpio, Impulswerte[i]);
+		name.str("");
+		name << "GPIO" << i;
+		try
+		{
+			cfg.lookupValue(name.str(),Impulswerte[i]);
+			syslog( LOG_INFO, "%s = %d", name.str().c_str(), Impulswerte[i]);
+		}
+		catch(const SettingNotFoundException &nfex)
+		{
+			cerr << "No " << name.str() << " setting in configuration file." << endl << std::flush;
+		}
 	}
 
 	tempSensors = 0;
 	for (i = 0; i < 100; i++) {
-		char name[8];
-		sprintf(name, "W1Dev%01d", i);
-		if (config_lookup_string(&cfg, name, &W1Sensor[i]) == CONFIG_TRUE) {
-			syslog( LOG_INFO, "%s = %s", name, W1Sensor[i]);
-			tempSensors++;
+		name.str("");
+		name << "W1Dev" << i;
+		try
+		{
+			if (cfg.lookupValue(name.str(),W1Sensor[i]))
+			{
+				//cout << "Sensor ID: " << W1Sensor[i] << endl << std::flush;
+				syslog( LOG_INFO, "%s = %s", name.str().c_str(), W1Sensor[i]);
+				tempSensors++;
+			}
+		}
+		catch(const SettingNotFoundException &nfex)
+		{
+			cerr << "No " << name.str() << " setting in configuration file." << endl << std::flush;
 		}
 	}
 
+	enOceanNumberSensors = 0;
+	stringstream name2;
+		for (i = 0; i < 100; i++) {
+			name.str("");
+			name2.str("");
+			name << "EnOceanSensor" << i;
+			name2 << "EnOceanAria" << i;
+			try
+			{
+				if (cfg.lookupValue(name.str(),EnOceanSensor[i]) &&
+					cfg.lookupValue(name2.str(),EnOceanTemperaturbereich[i]))
+				{
+					//cout << "Sensor ID: " << W1Sensor[i] << endl << std::flush;
+					syslog( LOG_INFO, "%s = %s aria %s", name.str().c_str(), EnOceanSensor[i],
+														EnOceanTemperaturbereich[i]);
+					enOceanNumberSensors++;
+				}
+			}
+			catch(const SettingNotFoundException &nfex)
+			{
+				cerr << "No " << name.str() << " setting in configuration file." << endl << std::flush;
+			}
+		}
+
+	return 0;
 }
 
 void logPrint(char *msg, unsigned int level)
@@ -487,8 +563,8 @@ int main(void) {
 	char buffer[BUF_LEN];
 	struct pollfd fds[inputs];
 
-	curl_global_init(CURL_GLOBAL_ALL);
-	multihandle = curl_multi_init();
+//	curl_global_init(CURL_GLOBAL_ALL);
+//	multihandle = curl_multi_init();
 
 	for (i = 0; i < inputs; i++) {
 		snprintf(buffer, BUF_LEN, "/sys/class/gpio/gpio%d/value",
@@ -504,16 +580,16 @@ int main(void) {
 		fds[i].events = POLLPRI;
 		fds[i].revents = 0;
 
-		easyhandle[i] = curl_easy_init();
-
-		curl_easy_setopt(easyhandle[i], CURLOPT_URL, url);
-		curl_easy_setopt(easyhandle[i], CURLOPT_POSTFIELDS, "");
-		curl_easy_setopt(easyhandle[i], CURLOPT_USERAGENT,
-				DAEMON_NAME " " DAEMON_VERSION);
-		curl_easy_setopt(easyhandle[i], CURLOPT_WRITEDATA, devnull);
-		curl_easy_setopt(easyhandle[i], CURLOPT_ERRORBUFFER, errorBuffer);
-
-		curl_multi_add_handle(multihandle, easyhandle[i]);
+//		easyhandle[i] = curl_easy_init();
+//
+//		curl_easy_setopt(easyhandle[i], CURLOPT_URL, url);
+//		curl_easy_setopt(easyhandle[i], CURLOPT_POSTFIELDS, "");
+//		curl_easy_setopt(easyhandle[i], CURLOPT_USERAGENT,
+//				DAEMON_NAME " " DAEMON_VERSION);
+//		curl_easy_setopt(easyhandle[i], CURLOPT_WRITEDATA, devnull);
+//		curl_easy_setopt(easyhandle[i], CURLOPT_ERRORBUFFER, errorBuffer);
+//
+//		curl_multi_add_handle(multihandle, easyhandle[i]);
 
 		values[i].numberOfValues = 0;
 		values[i].valuesAsSumm = 0;
@@ -532,25 +608,52 @@ int main(void) {
 	sem_init(&sem_averrage, 0, 1);
 	/* Thread erstellen für interval Berechnung*/
 	pthread_t intervalThread, intervalTemperaturThread;
+	if (Mittelwertzeit <= 0 )
+		Mittelwertzeit = 60;
 	if (pthread_create(&intervalThread, NULL, intervallFunction,
 			(void *) &Mittelwertzeit) != 0) {
 		printf("Thread can not be create.");
 		exit(1);
 	}
 
+	if (tempraturIntervall <= 0 )
+		tempraturIntervall = 30;
 	if (pthread_create(&intervalTemperaturThread, NULL, intervallTemperatur,
 			(void *) &tempraturIntervall) != 0) {
 		printf("Thread can not be create.");
 		exit(1);
 	}
 
+	EnOcean TheOcean;
+
+	for (i = 0; i < 100; i++) {
+		if (EnOceanSensor[i] != NULL) {
+			string bereich = EnOceanTemperaturbereich[i];
+			std::size_t pos = bereich.find(" ");
+			std::string maxstr = bereich.substr (pos);
+			int min = atoi(bereich.c_str());
+			int max = atoi(maxstr.c_str());
+			istringstream buffer(bereich);
+			buffer >> min >> max;
+			//std::size_t found = str.find(EnOceanTemperaturbereich[i]);
+			//char *s = strchr (bereich, ' ');
+
+			if (TheOcean.addSensor((char *)EnOceanSensor[i],min , max) != 0)
+			{
+				printf("Error can not add Sensor ID, ID %s is not a valid ID", "008281C9");
+			}
+		}
+	}
+
+	TheOcean.start(ENOCEAN_DEVICE);
+
 	for (;;) {
 
-		if ((multihandle_res = curl_multi_perform(multihandle, &running_handles))
-				!= CURLM_OK) {
-			syslog(LOG_INFO, "HTTP_POST(): %s",
-					curl_multi_strerror(multihandle_res));
-		}
+//		if ((multihandle_res = curl_multi_perform(multihandle, &running_handles))
+//				!= CURLM_OK) {
+//			syslog(LOG_INFO, "HTTP_POST(): %s",
+//					curl_multi_strerror(multihandle_res));
+//		}
 
 		int ret = poll(fds, inputs, 1000);
 
