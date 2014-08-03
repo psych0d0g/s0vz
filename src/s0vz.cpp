@@ -51,13 +51,14 @@
 #include <dirent.h>				/* constructs that facilitate directory traversing */
 
 #include <libconfig.h++>          /* reading, manipulating, and writing structured configuration files */
-#include <curl/curl.h>          /* multiprotocol file transfer library */
+//#include <curl/curl.h>          /* multiprotocol file transfer library */
 #include <poll.h>			/* wait for events on file descriptors */
 #include <pthread.h>
 #include <semaphore.h>
 #include <string>
 #include <iostream>     // std::cout
 #include <sstream>
+#include <sys/time.h>
 
 #include <sys/ioctl.h>		/* */
 
@@ -73,7 +74,7 @@ void signal_handler(int sig);
 void daemonize(char *rundir, char *pidfile);
 
 int pidFilehandle, vzport, len, running_handles, rc, count, tempSensors, enOceanNumberSensors;
-int LogLevel;
+unsigned int LogLevel;
 const char *Datafolder, *Messstellenname, *uuid;
 const char *W1Sensor[100];
 const char *EnOceanSensor[100], *EnOceanTemperaturbereich[100];
@@ -104,11 +105,11 @@ struct valuePack *values;
 
 sem_t sem_averrage;
 
-CURL *easyhandle[sizeof(gpio_pin_id) / sizeof(gpio_pin_id[0])];
-CURLM *multihandle;
-CURLMcode multihandle_res;
+//CURL *easyhandle[sizeof(gpio_pin_id) / sizeof(gpio_pin_id[0])];
+//CURLM *multihandle;
+//CURLMcode multihandle_res;
 
-static char errorBuffer[CURL_ERROR_SIZE + 1];
+//static char errorBuffer[CURL_ERROR_SIZE + 1];
 
 void signal_handler(int sig) {
 
@@ -645,7 +646,8 @@ int main(void) {
 		}
 	}
 
-	TheOcean.start(ENOCEAN_DEVICE);
+	char device[] = ENOCEAN_DEVICE;
+	TheOcean.start(device);
 
 	for (;;) {
 
@@ -669,7 +671,7 @@ int main(void) {
 		}
 	}
 
-	curl_global_cleanup();
+	//curl_global_cleanup();
 
 	return 0;
 }
