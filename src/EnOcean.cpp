@@ -221,9 +221,11 @@ int EnOcean::addSensor(char *id, int min, int max)
 	memcpy(element.sensorID, sensorID, sizeof(unsigned char)* 4 );
 	element.sumValue = 0;
 	element.values = 0;
-	dataList.push_back(element);
 	element.minValue = min;
 	element.maxValue = max;
+	element.lastValue = KELVINNULL;
+	dataList.push_back(element);
+
 
 	return 0;
 }
@@ -242,6 +244,38 @@ void EnOcean::addValueToList(double value, unsigned char sensorID[4])
 			it->values++;
 		}
 	}
+}
+
+void EnOcean::getDataAndClean(valuePack *values, int number)
+{
+	int i = 0;
+	sem_wait(&sem_data);
+	for (std::list<bs4Data>::iterator it=dataList.begin(); it != dataList.end(); ++it)
+	{
+		if (i >= number) {
+					break;
+		}
+		if (it->lastValue <= KELVINNULL && it->values == 0)
+		{
+			values[i].valuesAsSumm = KELVINNULL;
+			values[i].numberOfValues = 1;
+		}
+		else if (it->values == 0)
+		{
+			values[i].valuesAsSumm = it->lastValue;
+			values[i].numberOfValues = 1;
+		}
+		else
+		{
+			values[i].valuesAsSumm = it->sumValue;
+			values[i].numberOfValues = it->values;
+			it->lastValue = it->sumValue/it->values;
+		}
+it->sumValue = 0;
+		it->values = 0;
+		i++;
+	}
+	sem_post(&sem_data);
 }
 
 void* EnOcean::run(void *This){
@@ -350,7 +384,7 @@ void* EnOcean::run(void *This){
 									enOceanData.securityLevel = proto_buffer[12 + enOceanPacket.HeaderDataLength];
 
 									// Daten Erfolgreich Portiert in Structs
-									if (data4BS.lerntaste)
+									if (data4BS.lerntaste || !data4BS.lerntaste)
 									{
 										int minTemperatur = 0;
 										int maxTemperatur = 40;

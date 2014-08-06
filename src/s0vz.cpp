@@ -38,6 +38,7 @@
  **************************************************************************/
 
 #include "EnOcean.h"
+#include "DataStruct.h"
 #include <stdio.h>              /* standard library functions for file input and output */
 #include <stdlib.h>             /* standard library for the C programming language, */
 #include <string.h>             /* functions implementing operations on strings  */
@@ -62,6 +63,7 @@
 
 #include <sys/ioctl.h>		/* */
 
+
 using namespace std;
 using namespace libconfig;
 
@@ -81,6 +83,7 @@ const char *EnOceanSensor[100], *EnOceanTemperaturbereich[100];
 int Mittelwertzeit = 0;
 int Impulswerte[6];
 int tempraturIntervall = 0;
+EnOcean *TheOcean;
 
 char crc_ok[] = "YES";
 char not_found[] = "not found.";
@@ -93,13 +96,6 @@ double temp;
 Config cfg;
 
 struct timeval tv;
-
-struct valuePack {
-	double valuesAsSumm;
-	int numberOfValues;
-	int impulsConst;
-	long lastTs;
-};
 
 struct valuePack *values;
 
@@ -339,6 +335,13 @@ int cfile() {
 				if (cfg.lookupValue(name.str(),EnOceanSensor[i]) &&
 					cfg.lookupValue(name2.str(),EnOceanTemperaturbereich[i]))
 				{
+					char *tmp = (char*) malloc(strlen(EnOceanSensor[i])+1);
+					memcpy(tmp,EnOceanSensor[i],strlen(EnOceanSensor[i])+1);
+					EnOceanSensor[i] = tmp;
+					tmp = (char*) malloc(strlen(EnOceanTemperaturbereich[i])+1);
+					memcpy(tmp,EnOceanTemperaturbereich[i],strlen(EnOceanTemperaturbereich[i])+1);
+					EnOceanTemperaturbereich[i] = tmp;
+
 					//cout << "Sensor ID: " << W1Sensor[i] << endl << std::flush;
 					syslog( LOG_INFO, "%s = %s aria %s", name.str().c_str(), EnOceanSensor[i],
 														EnOceanTemperaturbereich[i]);
@@ -440,6 +443,7 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
 
 	while (1) {
 		sleep(t);
+		// Temperatursorwerte holen und Mittelwert berechnen
 		sem_wait(&sem_averrage);
 		for (i = 0; i < (inputs + tempSensors); i++) {
 			if (values[i].numberOfValues > 0) {
@@ -452,6 +456,28 @@ void *intervallFunction(void *time) { // Der Type ist wichtig: void* als Paramet
 			sprintf(str, "%s%.3f;", str, averrage[i]);
 		}
 		sem_post(&sem_averrage);
+
+		TheOcean->getDataAndClean(&values[inputs + tempSensors ], enOceanNumberSensors);
+
+		for (i = inputs + tempSensors; i < (inputs + tempSensors + enOceanNumberSensors); i++) {
+			if (values[i].numberOfValues > 0) {
+				if (values[i].valuesAsSumm <= KELVINNULL)
+				{
+					sprintf(str, "%sNoValue;", str);
+				}
+				else
+				{
+					averrage[i] = values[i].valuesAsSumm / values[i].numberOfValues;
+					sprintf(str, "%s%.3f;", str, averrage[i]);
+				}
+
+			} else {
+				averrage[i] = 0;
+			}
+			values[i].numberOfValues = 0;
+			values[i].valuesAsSumm = 0;
+
+		}
 
 		sprintf(str, "%s", str);
 
@@ -559,7 +585,7 @@ int main(void) {
 	#endif
 
 	values = (struct valuePack*) malloc(
-			sizeof(struct valuePack) * (inputs + tempSensors));
+			sizeof(struct valuePack) * (inputs + tempSensors + enOceanNumberSensors));
 
 	char buffer[BUF_LEN];
 	struct pollfd fds[inputs];
@@ -599,7 +625,7 @@ int main(void) {
 
 	}
 
-	for (i = inputs; i < (inputs + tempSensors); i++) {
+	for (i = inputs; i < (inputs + tempSensors + enOceanNumberSensors); i++) {
 		values[i].numberOfValues = 0;
 		values[i].valuesAsSumm = 0;
 		values[i].impulsConst = 0;
@@ -625,7 +651,7 @@ int main(void) {
 		exit(1);
 	}
 
-	EnOcean TheOcean;
+	TheOcean = new EnOcean();
 
 	for (i = 0; i < 100; i++) {
 		if (EnOceanSensor[i] != NULL) {
@@ -639,7 +665,7 @@ int main(void) {
 			//std::size_t found = str.find(EnOceanTemperaturbereich[i]);
 			//char *s = strchr (bereich, ' ');
 
-			if (TheOcean.addSensor((char *)EnOceanSensor[i],min , max) != 0)
+			if (TheOcean->addSensor((char *)EnOceanSensor[i],min , max) != 0)
 			{
 				printf("Error can not add Sensor ID, ID %s is not a valid ID", "008281C9");
 			}
@@ -647,7 +673,7 @@ int main(void) {
 	}
 
 	char device[] = ENOCEAN_DEVICE;
-	TheOcean.start(device);
+	TheOcean->start(device);
 
 	for (;;) {
 
@@ -672,6 +698,6 @@ int main(void) {
 	}
 
 	//curl_global_cleanup();
-
+	delete TheOcean;
 	return 0;
 }

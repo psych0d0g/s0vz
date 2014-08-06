@@ -12,11 +12,13 @@
 #include <semaphore.h>
 #include <pthread.h>
 #include <list>
+#include "DataStruct.h"
 
 #ifndef ENOCEAN_H_
 #define ENOCEAN_H_
 
-# define TERM_SPEED B57600
+#define TERM_SPEED B57600
+#define KELVINNULL -273
 
 struct bs4Data {
 	double sumValue;
@@ -24,6 +26,7 @@ struct bs4Data {
 	unsigned char sensorID[4];
 	int minValue;
 	int maxValue;
+	double lastValue;
 };
 
 class EnOcean {
@@ -32,6 +35,7 @@ public:
 	int start(char *device);
 	void stop(void);
 	int addSensor(char *id, int min, int max);
+	void getDataAndClean(valuePack *values, int number);
 	virtual ~EnOcean();
 
 protected:
