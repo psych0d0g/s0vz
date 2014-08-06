@@ -240,8 +240,13 @@ int cfile() {
 
 	try
 	{
-		 cfg.lookupValue("Datafolder", Datafolder);
-		 syslog(LOG_INFO, "Datafolder:%s", Datafolder);
+		if (cfg.lookupValue("Datafolder",Datafolder))
+		{
+			char *tmp = (char*) malloc(strlen(Datafolder)+1);
+			memcpy(tmp,Datafolder,strlen(Datafolder)+1);
+			Datafolder = tmp;
+			syslog(LOG_INFO, "Datafolder:%s", Datafolder);
+		}
 	}
 	catch(const SettingNotFoundException &nfex)
 	{
@@ -250,8 +255,13 @@ int cfile() {
 
 	try
 	{
-		cfg.lookupValue("Messstelle", Messstellenname);
-		syslog(LOG_INFO, "Messstelle:%s", Messstellenname);
+		if (cfg.lookupValue("Messstelle",Messstellenname))
+		{
+			char *tmp = (char*) malloc(strlen(Messstellenname)+1);
+			memcpy(tmp,Messstellenname,strlen(Messstellenname)+1);
+			Messstellenname = tmp;
+			syslog(LOG_INFO, "Messstelle:%s", Datafolder);
+		}
 	}
 	catch(const SettingNotFoundException &nfex)
 	{
@@ -313,8 +323,13 @@ int cfile() {
 			if (cfg.lookupValue(name.str(),W1Sensor[i]))
 			{
 				//cout << "Sensor ID: " << W1Sensor[i] << endl << std::flush;
+				char *tmp = (char*) malloc(strlen(W1Sensor[i])+1);
+				memcpy(tmp,W1Sensor[i],strlen(W1Sensor[i])+1);
+				W1Sensor[i] = tmp;
+
 				syslog( LOG_INFO, "%s = %s", name.str().c_str(), W1Sensor[i]);
 				tempSensors++;
+
 			}
 		}
 		catch(const SettingNotFoundException &nfex)
