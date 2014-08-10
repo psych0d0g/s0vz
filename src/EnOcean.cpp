@@ -146,6 +146,10 @@ int EnOcean::start(char *device ){
 	if (pthread_create(&runningThread, NULL, EnOcean::callRunFunction, this) != 0) {
 		printf("Running Thread can not be create.");
 	}
+	else
+	{
+		printf("Enocean Thread gestartet.");
+	}
 	return true;
 }
 
