@@ -101,7 +101,7 @@ const unsigned char EnOcean::u8CRC8Table[256] = {
 };
 
 
-int EnOcean::start(char *device ){
+int EnOcean::start(const char *device ){
 
 	//OPEN THE UART
 	//The flags (defined in fcntl.h):

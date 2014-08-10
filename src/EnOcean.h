@@ -32,7 +32,7 @@ struct bs4Data {
 class EnOcean {
 public:
 	EnOcean();
-	int start(char *device);
+	int start(const char *device);
 	void stop(void);
 	int addSensor(char *id, int min, int max);
 	void getDataAndClean(valuePack *values, int number);

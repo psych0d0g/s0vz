@@ -77,7 +77,7 @@ void daemonize(char *rundir, char *pidfile);
 
 int pidFilehandle, vzport, len, running_handles, rc, count, tempSensors, enOceanNumberSensors;
 unsigned int LogLevel;
-const char *Datafolder, *Messstellenname, *uuid;
+const char *Datafolder, *Messstellenname, *uuid, *EnOceanDevice;
 const char *W1Sensor[100];
 const char *EnOceanSensor[100], *EnOceanTemperaturbereich[100];
 int Mittelwertzeit = 0;
@@ -337,6 +337,22 @@ int cfile() {
 			cerr << "No " << name.str() << " setting in configuration file." << endl << std::flush;
 		}
 	}
+
+	try
+	{
+		if (cfg.lookupValue("EnOceanDevice",EnOceanDevice))
+		{
+			char *tmp = (char*) malloc(strlen(EnOceanDevice)+1);
+			memcpy(tmp,Messstellenname,strlen(EnOceanDevice)+1);
+			EnOceanDevice = tmp;
+			syslog(LOG_INFO, "EnOceanDevice:%s", EnOceanDevice);
+		}
+	}
+	catch(const SettingNotFoundException &nfex)
+	{
+		cerr << "No EnOceanDevice setting in configuration file." << endl;
+	}
+
 
 	enOceanNumberSensors = 0;
 	stringstream name2;
@@ -688,7 +704,7 @@ int main(void) {
 	}
 
 	char device[] = ENOCEAN_DEVICE;
-	TheOcean->start(device);
+	TheOcean->start(EnOceanDevice);
 
 	for (;;) {
 
