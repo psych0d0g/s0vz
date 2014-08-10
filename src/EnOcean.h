@@ -51,6 +51,7 @@ protected:
 	std::list<bs4Data> dataList;
 	sem_t sem_data;
 	pthread_t runningThread;
+	const char *device;
 
 };
 

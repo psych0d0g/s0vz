@@ -343,7 +343,7 @@ int cfile() {
 		if (cfg.lookupValue("EnOceanDevice",EnOceanDevice))
 		{
 			char *tmp = (char*) malloc(strlen(EnOceanDevice)+1);
-			memcpy(tmp,Messstellenname,strlen(EnOceanDevice)+1);
+			memcpy(tmp,EnOceanDevice,strlen(EnOceanDevice)+1);
 			EnOceanDevice = tmp;
 			syslog(LOG_INFO, "EnOceanDevice:%s", EnOceanDevice);
 		}

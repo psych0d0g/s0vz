@@ -115,7 +115,7 @@ int EnOcean::start(const char *device ){
 	//											immediately with a failure status if the output can't be written immediately.
 	//
 	//	O_NOCTTY - When set and path identifies a terminal device, open() shall not cause the terminal device to become the controlling terminal for the process.
-	uart0_filestream = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY | O_NDELAY);		//Open in non blocking read/write mode
+	uart0_filestream = open(device, O_RDWR | O_NOCTTY | O_NDELAY);		//Open in non blocking read/write mode
 	if (uart0_filestream == -1)
 	{
 		//ERROR - CAN'T OPEN SERIAL PORT
@@ -141,6 +141,7 @@ int EnOcean::start(const char *device ){
 	tcflush(uart0_filestream, TCIFLUSH);
 	tcsetattr(uart0_filestream, TCSANOW, &options);
 
+	this->device = device;
 	running = true;
 
 	if (pthread_create(&runningThread, NULL, EnOcean::callRunFunction, this) != 0) {
@@ -288,7 +289,7 @@ void* EnOcean::run(void *This){
 	int position = 0;
 	if (uart0_filestream != -1)
 	{
-		printf("TtyUSB0 is connected. \n");
+		printf("%s is connected. \n",device);
 	}
 	if (((EnOcean *)This)->uart0_filestream != -1)
 	{
