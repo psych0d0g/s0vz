@@ -280,23 +280,23 @@ int cfile() {
 
 	try
 	{
+		cfg.lookupValue("TempraturIntervall",tempraturIntervall);
+		syslog(LOG_INFO, "TemperaturInterval:%d", tempraturIntervall);
+	}
+	catch(const SettingNotFoundException &nfex)
+	{
+		cerr << "No TempraturIntervall setting in configuration file." << endl;
+	}
+
+	try
+	{
 		cfg.lookupValue("LogLevel", LogLevel);
-		syslog(LOG_INFO, "v:%d", LogLevel);
+		syslog(LOG_INFO, "LogLevel:%d", LogLevel);
 	}
 	catch(const SettingNotFoundException &nfex)
 	{
 		LogLevel = 4;
 		cerr << "No LogLevel setting in configuration file." << endl;
-	}
-
-	try
-	{
-		cfg.lookupValue("TempraturIntervall",tempraturIntervall);
-		syslog(LOG_INFO, "v:%d", tempraturIntervall);
-	}
-	catch(const SettingNotFoundException &nfex)
-	{
-		cerr << "No TempraturIntervall setting in configuration file." << endl;
 	}
 
 	stringstream name;

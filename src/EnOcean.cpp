@@ -437,7 +437,7 @@ void* EnOcean::run(void *This){
 
 
 			}
-
+			sleep(1);
 		}
 	}
 	close(((EnOcean *)This)->uart0_filestream);
